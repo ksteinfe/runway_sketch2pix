@@ -1,5 +1,5 @@
 # You can optionally pin to a version of the Runway Model SDK like: "runway-python==0.1.0"
 runway-python
-Pillow==6.0.0
+Pillow==6.2.0
 matplotlib
 IPython
