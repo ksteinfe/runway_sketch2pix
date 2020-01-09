@@ -34,8 +34,8 @@
           <Menu>CED Runway</Menu>
           <Geometry>
             <Size>
-              <Height>100</Height>
-              <Width>100</Width>
+              <Height>50</Height>
+              <Width>200</Width>
             </Size>
           </Geometry>
           <Icons />

@@ -5,9 +5,40 @@
     <title>ced runway-to-photoshop pipeline</title>
 </head>
 <body>
-    <button id="the-button">infer!</button>
-    <a onClick="window.cep.util.openURLInDefaultBrowser('http://localhost:8088/')" style="cursor: pointer; cursor: hand;">debug here</a>
+    <button id="the-button" class="button">abracadabra!</button>
+    <button class="debug button" onclick="window.cep.util.openURLInDefaultBrowser('http://localhost:8088/')">debug</button>
     <script type="text/javascript" src="CSInterface.js"></script>
     <script type="text/javascript" src="index.js"></script>
+
+    <!-- stylesheet for this button -->
+    <style type="text/css">
+    .button {
+      backface-visibility: hidden;
+      position: relative;
+      cursor: pointer;
+      display: inline-block;
+      white-space: nowrap;
+      background: #444;
+      border-radius: 0px;
+      border: 3px solid #222;
+      border-width: 3px 3px 3px 3px;
+      padding: 5px 20px 5px 20px;
+      color: #fff;
+      font-size: 12px;
+      font-family: arial;
+      font-weight: 100;
+      font-style: normal
+    }
+    .debug{
+      color: #666;
+      padding: 5px;
+      font-size: 10px;
+    }
+
+    body {
+      background: #333;
+    }
+    </style>
+
 </body>
 </html>
