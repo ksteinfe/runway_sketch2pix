@@ -14,11 +14,11 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-version_number = 0.8
+version_number = 0.0
 print('pix2pix r{} has loaded.'.format(version_number))
 
 class ImgUtil():
-    whitelist_ext = ['jpg', 'jpeg', 'png']
+    whitelist_ext = ['jpg', 'jpeg', 'png'] # referenced in data preparation notebook
     @staticmethod
     def verify_ext(fname):
         return any([fname.lower().endswith(ext) for ext in ImgUtil.whitelist_ext ])
@@ -228,6 +228,7 @@ class Pix2Pix256RGBA():
         self.epoch_count = op['epoch_count']       # 'the starting epoch count
         self.niter = op['niter']             # '# of iter at starting learning rate
         self.niter_decay = op['niter_decay']       # '# of iter to linearly decay learning rate to zero
+        self.niter_per_checkpoint:op['niter_per_checkpoint']  # '# of iter to run before saving a checkpoint # KSTEINFE ADDED
         self.lr = op['lr']                # 'initial learning rate for adam
         self.lr_policy = op['lr_policy']         # 'learning rate policy: lambda|step|plateau|cosine
         self.lr_decay_iters = op['lr_decay_iters']    # 'multiply by a gamma every lr_decay_iters iterations
@@ -240,18 +241,15 @@ class Pix2Pix256RGBA():
         cudnn.benchmark = True
         torch.manual_seed(self.seed)
         if self.cuda: torch.cuda.manual_seed(self.seed)
-        self.generator, self.discriminator = False, False
-        #self.loss_object, self.generator_optimizer, self.discriminator_optimizer = False, False, False
-        #self.checkpoint = False
+
+        self.generator, self.discriminator = False, False # these are initalized in static constructors
 
     @staticmethod
-    def construct_training_model(opts=None):
+    def construct_training_model(opts=None, pths_pretrained=None):
         print("Constructing a model for training.")
         mdl = Pix2Pix256RGBA(opts)
         mdl.device = torch.device("cuda:0" if mdl.cuda else "cpu")
 
-        #net_g = define_G(opt.input_nc, opt.output_nc, opt.ngf, 'batch', False, 'normal', 0.02, gpu_id=self.device)
-        #net_d = define_D(opt.input_nc + opt.output_nc, opt.ndf, 'basic', gpu_id=self.device)
         mdl.generator = Pix2Pix256RGBA.define_G(mdl.input_nc, mdl.output_nc, mdl.ngf, 'batch', False, 'normal', 0.02, gpu_id=mdl.device)
         mdl.discriminator= Pix2Pix256RGBA.define_D(mdl.input_nc + mdl.output_nc, mdl.ndf, 'basic', gpu_id=mdl.device)
 
@@ -265,6 +263,8 @@ class Pix2Pix256RGBA():
         mdl.net_g_scheduler = Pix2Pix256RGBA.get_scheduler(mdl.optimizer_g, mdl)
         mdl.net_d_scheduler = Pix2Pix256RGBA.get_scheduler(mdl.optimizer_d, mdl)
 
+        if pths_pretrained is not None:
+            Pix2Pix256RGBA._restore_from_pickles(mdl, pths_pretrained)
 
         print("Training model constructed!")
         return mdl
@@ -277,28 +277,38 @@ class Pix2Pix256RGBA():
 
     @staticmethod
     def restore_from_checkpoint(pth_check, opts=None):
-        suffix_g = "_generator.pth"
-        suffix_d = "_discriminator.pth"
 
-        mdl = Pix2Pix256RGBA.construct_training_model(opts)
         print("...restoring model from checkpoints at '{}".format(pth_check))
+        pths_pkld = Pix2Pix256RGBA.list_checkpoints(pth_check)[0]
+        print("...generator of latest checkpoint found is \t'{}'".format(pths_pkld['pth_g']))
+        mdl = Pix2Pix256RGBA.construct_training_model(opts,pths_pkld)
 
-        fname_g = sorted([f for f in os.listdir(pth_check) if f.endswith(suffix_g)], reverse=True)[0]
-        fname_d = sorted([f for f in os.listdir(pth_check) if f.endswith(suffix_d)], reverse=True)[0]
+        print("Model restored from checkpoint!")
+        return mdl, pths_pkld
 
-        print("...restoring latest checkpoints\t'{}''\t'{}'".format(fname_g, fname_d))
-
-        #model_path = "checkpoint/{}/netG_model_epoch_{}.pth".format(opt.dataset, opt.nepochs)
-        net_g_model_path = os.path.join(pth_check, fname_g )
-        net_d_model_path = os.path.join(pth_check, fname_d )
-        mdl.generator = torch.load(net_g_model_path).to(mdl.device)
-        mdl.discriminator = torch.load(net_d_model_path).to(mdl.device)
+    @staticmethod
+    def _restore_from_pickles(mdl, pths_pkld):
+        pth_g, pth_d = pths_pkld['pth_g'], pths_pkld['pth_d']
+        print("...restoring pickles:\nG\t{}\nD\t{}".format(pth_g, pth_d))
+        if mdl.cuda:
+            print("...restoring to run on GPU")
+            mdl.generator = torch.load(pth_g).to(mdl.device)
+            mdl.discriminator = torch.load(pth_d).to(mdl.device)
+        else:
+            print("...restoring to run on CPU")
+            mdl.generator = torch.load(pth_g, map_location=lambda storage, location: storage).to(mdl.device)
+            mdl.discriminator = torch.load(pth_d, map_location=lambda storage, location: storage).to(mdl.device)
 
         mdl.generator.eval()
         mdl.discriminator.eval()
 
-        print("Model restored from checkpoint!")
-        return mdl
+    def list_checkpoints(pth_check):
+        # here's hoping these files are in valid pairs, and that they sort well
+        suffix_g = "_generator.pth"
+        suffix_d = "_discriminator.pth"
+        fnames_g = sorted([f for f in os.listdir(pth_check) if f.endswith(suffix_g)], reverse=True)
+        fnames_d = sorted([f for f in os.listdir(pth_check) if f.endswith(suffix_d)], reverse=True)
+        return [{'pth_g':os.path.join(pth_check, g), 'pth_d':os.path.join(pth_check, d)} for g,d in zip(fnames_g, fnames_d)]
 
     def generate(self, imgpil_in):
         # TODO: resize image and check for RGBA mode here if needed?
@@ -323,7 +333,7 @@ class Pix2Pix256RGBA():
         pth_check, pth_rslts = dinfo.pth_chck , dinfo.pth_prog
 
         training_data_loader = DataLoader(dataset=train_ds, num_workers=self.threads, batch_size=self.batch_size, shuffle=True)
-        testing_data_loader = DataLoader(dataset=test_ds, num_workers=self.threads, batch_size=self.test_batch_size, shuffle=False)
+        testing_data_loader = DataLoader(dataset=test_ds, num_workers=self.threads, batch_size=self.test_batch_size, shuffle=True) #KS shuffle was false
 
         for epoch in range(self.epoch_count, self.niter + self.niter_decay + 1):
             # train
@@ -371,7 +381,7 @@ class Pix2Pix256RGBA():
                 self.optimizer_g.step()
 
                 # callback an iteration report
-                report_iter_callback(epoch, self.niter + self.niter_decay, iteration, len(training_data_loader), loss_d.item(), loss_g.item())
+                report_iter_callback(epoch, iteration, loss_d.item(), loss_g.item())
 
 
             lr_g = Pix2Pix256RGBA.update_learning_rate(self.net_g_scheduler, self.optimizer_g)
@@ -387,11 +397,8 @@ class Pix2Pix256RGBA():
                 psnr = 10 * math.log10(1 / mse.item())
                 avg_psnr += psnr
 
-            # callback an epoch report
-            img_giv = input.detach().squeeze(0).cpu()
-            img_tar = target.detach().squeeze(0).cpu()
-            img_gen = prediction.detach().squeeze(0).cpu()
-            report_epoch_callback(epoch, self.niter + self.niter_decay, avg_psnr / len(testing_data_loader), lr_d, lr_g, img_giv, img_tar, img_gen)
+            # plot progress images and callback an epoch report
+            report_epoch_callback(epoch, avg_psnr / len(testing_data_loader), lr_d, lr_g)
 
             #save checkpoint
             if epoch % self.niter_per_checkpoint == 0: self.save_checkpoint(epoch, pth_check)
