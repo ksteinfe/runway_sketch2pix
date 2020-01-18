@@ -20,15 +20,17 @@ function JSXPreInference(id, mimeType, tarSize, savePath){
   var layer = getArtLayerById(id);
 
   var bndsOrg = bndsToPxlDim(layer.bounds); // convert array of unit values to numbers
-  var modInfo = modifyBounds(bndsOrg, tarSize); // modify the bounds of selected layer to a square of at least tarSize
+  //var modInfo = modifyBounds(bndsOrg, tarSize); // modify the bounds of selected layer to a square of at least tarSize
 
-  savePath = savePath.replace(/\\/g, "\\\\");
-  app.activeDocument.suspendHistory("Runway Pre-Inference", 'preInference('+id+', "'+mimeType+'", '+modInfo.size+', '+tarSize+', "'+savePath+'")');
+  //savePath = savePath.replace(/\\/g, "\\\\");
+  //app.activeDocument.suspendHistory("Runway Pre-Inference", 'preInference('+id+', "'+mimeType+'", '+modInfo.size+', '+tarSize+', "'+savePath+'")');
+  var base64Str = selectedLayersToBase64String(id);
 
   // everything going back to JS land is a string, so here we use JSON
-  return '{"savePath": "'+savePath+'", "bounds": ['+modInfo.bnds.join(",")+'], "size": '+modInfo.size+'}';
+  return '{"img64": "'+base64Str+'", "bounds": ['+bndsOrg.join(",")+']}';
 }
 
+/*
 function preInference(id, mimeType, size, tarSize, savePath) {
   var layer = getArtLayerById(id);
   layer.copy();
@@ -44,6 +46,7 @@ function preInference(id, mimeType, size, tarSize, savePath) {
   docRef.close(SaveOptions.DONOTSAVECHANGES);
 }
 
+
 function modifyBounds(bnds, minDim){
   var w = bndsWidth(bnds);
   var h = bndsHeight(bnds);
@@ -58,6 +61,7 @@ function modifyBounds(bnds, minDim){
       size: dim
   };
 }
+*/
 
 //////////// POST-INFERENCE
 
@@ -83,19 +87,16 @@ function postInferenceMacro(twinLayerId, tarBounds, layerSetName, filename) {
   for (var l in deletableLayers){ deletableLayers[l].remove();}
 
   // open inferred image and paste into this document
-  var srcDoc = app.open(new File(filename));
-  if ((srcDoc.width != tarBounds[2]-tarBounds[0])||(srcDoc.height != tarBounds[3]-tarBounds[1])){
-    srcDoc.resizeImage(tarBounds[2]-tarBounds[0], tarBounds[3]-tarBounds[1]);
-  }
-  srcDoc.selection.selectAll();
-  srcDoc.selection.copy();
-  srcDoc.close(SaveOptions.DONOTSAVECHANGES);
-  dstDoc.paste();
+  placeFile(filename);
+  dstDoc.activeLayer.rasterize(RasterizeType.ENTIRELAYER);
+  var w = bndsWidth(tarBounds);
+  var h = bndsHeight(tarBounds);
 
   // rename, resize, align, link
   dstDoc.activeLayer.name = twinLayer.name;
-  var curBounds = bndsToPxlDim(dstDoc.activeLayer.bounds);
-  dstDoc.activeLayer.translate(tarBounds[0] - curBounds[0], tarBounds[1] - curBounds[1]);
+  var x = tarBounds[0] - (dstDoc.width/2 - w/2);
+  var y = tarBounds[1] - (dstDoc.height/2 - h/2);
+  dstDoc.activeLayer.translate(-x,-y);
   dstDoc.activeLayer.link(twinLayer);
   dstDoc.activeLayer.move(destLayerSet, ElementPlacement.INSIDE);
 
@@ -109,6 +110,50 @@ function bndsToPxlDim(bnds){ return Array( bnds[0].as("px"), bnds[1].as("px"), b
 function bndsWidth(bnds){ return bnds[2] - bnds[0]; }
 function bndsHeight(bnds){ return bnds[3] - bnds[1]; }
 
+
+function selectedLayersToBase64String(layerID) {
+  var pngPath, pngFile, pngData64, pngBase64Image;
+
+  layerID = app.activeDocument.activeLayer.id;
+
+  pngPath = new File(Folder.temp + "/" + layerID).fsName;
+  writeLayerPNGfile(pngPath);
+
+  pngFile = new File(pngPath + ".base64");
+  pngFile.open('r');
+  pngFile.encoding = "UTF-8";
+
+  pngData64 = pngFile.read();
+  pngFile.close();
+  //pngFile.remove();
+
+  //return pngData64;
+  return "data:image/png;base64," + pngData64;
+};
+
+function writeLayerPNGfile(path) {
+  var desc = new ActionDescriptor();
+  desc.putBoolean(stringIDToTypeID("selectedLayers"), true); // Get data from all selected layers
+  desc.putString(stringIDToTypeID("rawPixmapFilePath"), path); // Path to file
+  desc.putBoolean(stringIDToTypeID("bounds"), true);
+  desc.putInteger(stringIDToTypeID("width"), 10000); // Max size in pixels
+  desc.putInteger(stringIDToTypeID("height"), 10000);
+  desc.putInteger(stringIDToTypeID("format"), 2); // raw pixels (Don't touch this!)
+  executeAction(stringIDToTypeID("sendLayerThumbnailToNetworkClient"), desc, DialogModes.NO);
+}
+
+function placeFile(path){
+  var sourceFile= new File(path);
+  var idPlc = charIDToTypeID( "Plc " );
+  var desc3 = new ActionDescriptor();
+  var idnull = charIDToTypeID( "null" );
+  desc3.putPath( idnull, sourceFile);
+  var idFTcs = charIDToTypeID( "FTcs" );
+  var idQCSt = charIDToTypeID( "QCSt" );
+  var idQcsa = charIDToTypeID( "Qcsa" );
+  desc3.putEnumerated( idFTcs, idQCSt, idQcsa );
+  executeAction( idPlc, desc3, DialogModes.NO );
+}
 
 function getDestLayerSet(doc, lsetName) {
   var lset;

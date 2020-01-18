@@ -31,7 +31,7 @@
         </Lifecycle>
         <UI>
           <Type>Panel</Type>
-          <Menu>CED Runway</Menu>
+          <Menu>Sketch2Pix</Menu>
           <Geometry>
             <Size>
               <Height>50</Height>
