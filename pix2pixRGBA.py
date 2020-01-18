@@ -1,6 +1,6 @@
 import os, random, functools, shutil, glob, math
 
-from PIL import Image
+from PIL import Image, ImageChops
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -14,7 +14,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-version_number = 0.0
+version_number = 0.2
 print('pix2pix r{} has loaded.'.format(version_number))
 
 class ImgUtil():
@@ -82,6 +82,8 @@ class ImgUtil():
         plt.show()
 
 class Pix2PixDataset(data.Dataset):
+    FILL_COLOR = (200, 200, 200, 255)
+
     def __init__(self, extraction_rslt, direction="a2b"):
         super(Pix2PixDataset, self).__init__()
         self.direction = direction
@@ -99,16 +101,54 @@ class Pix2PixDataset(data.Dataset):
 
         return( transforms.Compose(transform_list) )
 
+    @staticmethod
+    def _fill_and_jiggle(line, rndr, fill_color, jig_amt=None, rot_amt=None, scl_amt=None):
+        if jig_amt is None: jig_amt = 4
+        if rot_amt is None: rot_amt = 2
+        if scl_amt is None: scl_amt = 0.1
+        jig_amt = int(jig_amt/2)
+        dim = rndr.size[0]
+
+        # jiggle rndr img
+        dx, dy = random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)
+        fill = Image.new('RGBA', rndr.size, (255, 255, 255, 0))
+        scl = random.uniform(1-scl_amt,1+scl_amt)
+        ndim = int(dim*scl)
+        rndr = rndr.resize((ndim,ndim), Image.BICUBIC)
+        fill.paste(rndr, (int((dim-ndim)/2), int((dim-ndim)/2)) )
+
+        _,_,_,alpha = fill.split()
+        gr = Image.new('RGBA', fill.size, fill_color)
+        wh = Image.new('RGBA', fill.size, (255, 255, 255, 255))
+        fill = Image.composite(gr,wh,alpha) # an image containing a grey region the shape of the alpha channel of rndr
+
+        # rotate line img
+        rot_amt = random.randint(-rot_amt,rot_amt)
+        line = line.rotate( rot_amt , Image.BICUBIC, fillcolor='white' )
+
+        # jiggle line img
+        dx, dy = random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)
+        back = Image.new('RGBA', line.size, (255, 255, 255, 255))
+        back.paste(line, (dx,dy))
+
+        return ImageChops.darker(back, fill)
+
     def __getitem__(self, index):
         # here, images are 'jittered': resized to 286 and then cropped back to 256
         a = ImgUtil.load_img(self.pths_a[index])
         b = ImgUtil.load_img(self.pths_b[index])
-        a = a.resize((286, 286), Image.BICUBIC)
-        b = b.resize((286, 286), Image.BICUBIC)
+
+        a = Pix2PixDataset._fill_and_jiggle(a,b, Pix2PixDataset.FILL_COLOR )
+
+        jtr_amt = random.randint(10, 20)
+        jtr_sze = 256+jtr_amt
+
+        a = a.resize((jtr_sze, jtr_sze), Image.BICUBIC)
+        b = b.resize((jtr_sze, jtr_sze), Image.BICUBIC)
         a = transforms.ToTensor()(a)
         b = transforms.ToTensor()(b)
-        w_offset = random.randint(0, max(0, 286 - 256 - 1))
-        h_offset = random.randint(0, max(0, 286 - 256 - 1))
+        w_offset = random.randint(0, max(0, jtr_sze - 256 - 1))
+        h_offset = random.randint(0, max(0, jtr_sze - 256 - 1))
 
         a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
         b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
@@ -270,9 +310,12 @@ class Pix2Pix256RGBA():
         return mdl
 
     @staticmethod
-    def construct_inference_model(opts=None):
+    def construct_inference_model(pth_stat, opts=None):
         print("Constructing a model for inference.")
         mdl = Pix2Pix256RGBA(opts)
+        mdl.device = torch.device("cuda:0" if mdl.cuda else "cpu")
+        mdl.generator = Pix2Pix256RGBA.define_G(mdl.input_nc, mdl.output_nc, mdl.ngf, 'batch', False, 'normal', 0.02, gpu_id=mdl.device)
+        Pix2Pix256RGBA._restore_generator_from_state_dict(mdl, pth_stat)
         return mdl
 
     @staticmethod
@@ -287,6 +330,19 @@ class Pix2Pix256RGBA():
         return mdl, pths_pkld
 
     @staticmethod
+    def _restore_generator_from_state_dict(mdl, pth_stat):
+        print("...restoring from state dict at:\n{}".format(pth_stat))
+        if mdl.cuda:
+            print("...restoring to run on GPU")
+            mdl.generator.load_state_dict(torch.load(pth_stat))
+        else:
+            print("...restoring to run on CPU")
+            #return torch.load(pth_g, map_location=lambda storage, location: storage).to(mdl.device)
+
+        #mdl.generator.eval()
+        #mdl.discriminator.eval()
+
+    @staticmethod
     def _restore_from_pickles(mdl, pths_pkld):
         pth_g, pth_d = pths_pkld['pth_g'], pths_pkld['pth_d']
         print("...restoring pickles:\nG\t{}\nD\t{}".format(pth_g, pth_d))
@@ -299,8 +355,8 @@ class Pix2Pix256RGBA():
             mdl.generator = torch.load(pth_g, map_location=lambda storage, location: storage).to(mdl.device)
             mdl.discriminator = torch.load(pth_d, map_location=lambda storage, location: storage).to(mdl.device)
 
-        mdl.generator.eval()
-        mdl.discriminator.eval()
+        #mdl.generator.eval()
+        #mdl.discriminator.eval()
 
     def list_checkpoints(pth_check):
         # here's hoping these files are in valid pairs, and that they sort well
@@ -311,7 +367,12 @@ class Pix2Pix256RGBA():
         return [{'pth_g':os.path.join(pth_check, g), 'pth_d':os.path.join(pth_check, d)} for g,d in zip(fnames_g, fnames_d)]
 
     def generate(self, imgpil_in):
-        # TODO: resize image and check for RGBA mode here if needed?
+        if imgpil_in.size != (Pix2Pix256RGBA.IMG_SIZE, Pix2Pix256RGBA.IMG_SIZE):
+            print("Resizing image from {} to {}".format(imgpil_in.size, (Pix2Pix256RGBA.IMG_SIZE, Pix2Pix256RGBA.IMG_SIZE) ))
+            imgpil_in = imgpil_in.resize( (Pix2Pix256RGBA.IMG_SIZE, Pix2Pix256RGBA.IMG_SIZE) )
+
+        if imgpil_in.mode != "RGBA": imgpil_in = imgpil_in.convert("RGBA")
+
         tform = Pix2PixDataset.tform()
         imgten_in = tform(imgpil_in)
         imgten_out = self.generator(imgten_in.unsqueeze(0).to(self.device))
@@ -337,6 +398,8 @@ class Pix2Pix256RGBA():
 
         for epoch in range(self.epoch_count, self.niter + self.niter_decay + 1):
             # train
+            #self.generator.train()
+            #self.discriminator.train()
             for iteration, batch in enumerate(training_data_loader, 1):
                 # forward
                 real_a, real_b = batch[0].to(self.device), batch[1].to(self.device)
@@ -381,13 +444,16 @@ class Pix2Pix256RGBA():
                 self.optimizer_g.step()
 
                 # callback an iteration report
-                report_iter_callback(epoch, iteration, loss_d.item(), loss_g.item())
+                iter_info = { 'e':epoch, 'i':iteration, 'loss_d':loss_d.item(), 'loss_g':loss_g.item() }
+                report_iter_callback(**iter_info)
 
 
             lr_g = Pix2Pix256RGBA.update_learning_rate(self.net_g_scheduler, self.optimizer_g)
             lr_d = Pix2Pix256RGBA.update_learning_rate(self.net_d_scheduler, self.optimizer_d)
 
             # test
+            #self.generator.eval()
+            #self.discriminator.eval()
             avg_psnr = 0
             for batch in testing_data_loader:
                 input, target = batch[0].to(self.device), batch[1].to(self.device)
@@ -398,7 +464,8 @@ class Pix2Pix256RGBA():
                 avg_psnr += psnr
 
             # plot progress images and callback an epoch report
-            report_epoch_callback(epoch, avg_psnr / len(testing_data_loader), lr_d, lr_g)
+            iter_info = { 'e':epoch, 'sig_to_noise_ratio':avg_psnr / len(testing_data_loader), 'learning_rate_d':lr_d, 'learning_rate_g':lr_g }
+            report_epoch_callback(**iter_info)
 
             #save checkpoint
             if epoch % self.niter_per_checkpoint == 0: self.save_checkpoint(epoch, pth_check)

@@ -2,9 +2,12 @@ import os
 import runway
 from runway.data_types import image, category
 #from model_switcher import ModelSwitcher
-from pix2pix import Pix2Pix256RGB, ImgUtil
-import tensorflow as tf
+from pix2pixRGBA import Pix2Pix256RGBA, ImgUtil
+import torch
+#import tensorflow as tf
 
+
+DUMMY_CHECKPOINT_FNAME = "200113b_pretty_mushrooms.pt"
 
 # Setup the Model
 ########################################
@@ -12,25 +15,32 @@ setup_options = {'checkpoint': runway.file(extension='.h5')}
 @runway.setup(options=setup_options)
 def setup(opts):
     print('[SETUP] Ran with {} options defined.'.format(len(opts)))
-    print("[SETUP] Ran tensorflow version {}".format(tf.__version__))
+    print("[SETUP] Ran torch version {}".format(torch.__version__))
 
     checkpoint_path = opts['checkpoint']
+    mdl = False
 
     if checkpoint_path is not None:
         print("Checkpoint found. Attempting to restore {}".format(checkpoint_path))
-        mdl = Pix2Pix256RGB.restore_from_hdf5(checkpoint_path)
+        mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path)
         return mdl
 
     print("!!! No checkpoint path found.")
+
+    checkpoint_path = os.path.join(os.getcwd(), DUMMY_CHECKPOINT_FNAME)
+    print("Attempting to restore local testing checkpoint {}".format(checkpoint_path))
+    mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path)
+    return mdl
+
     try:
-        checkpoint_path = os.path.join(os.getcwd(), "testing_model.h5")
+        checkpoint_path = os.path.join(os.getcwd(), DUMMY_CHECKPOINT_FNAME)
         print("Attempting to restore local testing checkpoint {}".format(checkpoint_path))
-        mdl = Pix2Pix256RGB.restore_from_hdf5(checkpoint_path)
+        mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path)
         return mdl
     except Exception as e:
         print(e)
         print("!!! Cannot restore this model. Only dummy images will be returned.")
-        mdl = Pix2Pix256RGB()
+        mdl = Pix2Pix256RGBA()
         return mdl
 
 
@@ -48,7 +58,7 @@ generate_command_inputs = {
   'image_in': image(width=256, height=256)
 }
 generate_command_outputs = {
-  'image_out': image(width=256, height=256)
+  'image_out': image(width=256, height=256, channels=4)
 }
 @runway.command(name='generate',
                 inputs=generate_command_inputs,
@@ -56,10 +66,15 @@ generate_command_outputs = {
                 description='this thing does a thing')
 def generate(model, args):
     print('[GENERATE]\n image_in: "{}"'.format(args['image_in']))
-    #model.switch_to(args['model_to_apply'])
     output_image = args['image_in']
-    print(model.generator)
-    if model.generator: output_image = generate_from_PIL_img(model, args['image_in'])
+    size_in = args['image_in'].size
+    if model.generator: output_image = model.generate(args['image_in'])
+
+    if output_image.size != size_in:
+        print("Resizing output image from {} to {}".format(output_image.size, size_in ))
+        output_image = output_image.resize( size_in )
+
+    print(output_image.mode)
     return {'image_out': output_image}
 
 

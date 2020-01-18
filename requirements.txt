@@ -3,3 +3,4 @@ runway-python
 Pillow==6.2.0
 matplotlib
 IPython
+torch
