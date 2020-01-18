@@ -321,9 +321,9 @@ class Pix2Pix256RGBA():
     @staticmethod
     def restore_from_checkpoint(pth_check, opts=None):
 
-        print("...restoring model from checkpoints at '{}".format(pth_check))
+        print("...restoring model from checkpoints at \n\t'{}".format(pth_check))
         pths_pkld = Pix2Pix256RGBA.list_checkpoints(pth_check)[0]
-        print("...generator of latest checkpoint found is \t'{}'".format(pths_pkld['pth_g']))
+        print("...generator of latest checkpoint found is \n\t'{}'".format(pths_pkld['pth_g']))
         mdl = Pix2Pix256RGBA.construct_training_model(opts,pths_pkld)
 
         print("Model restored from checkpoint!")
