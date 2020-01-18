@@ -7,35 +7,31 @@ import torch
 #import tensorflow as tf
 
 
-DUMMY_CHECKPOINT_FNAME = "200113b_pretty_mushrooms.pt"
+DUMMY_CHECKPOINT_FNAME = "200118a_pretty_mushroom.pt"
 
 # Setup the Model
 ########################################
-setup_options = {'checkpoint': runway.file(extension='.h5')}
+setup_options = {'checkpoint': runway.file(extension='.pt')}
 @runway.setup(options=setup_options)
 def setup(opts):
     print('[SETUP] Ran with {} options defined.'.format(len(opts)))
     print("[SETUP] Ran torch version {}".format(torch.__version__))
 
     checkpoint_path = opts['checkpoint']
+    mdl_opts = {'cuda':torch.cuda.is_available()}
     mdl = False
 
     if checkpoint_path is not None:
         print("Checkpoint found. Attempting to restore {}".format(checkpoint_path))
-        mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path)
+        mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path, mdl_opts)
         return mdl
 
     print("!!! No checkpoint path found.")
 
-    checkpoint_path = os.path.join(os.getcwd(), DUMMY_CHECKPOINT_FNAME)
-    print("Attempting to restore local testing checkpoint {}".format(checkpoint_path))
-    mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path)
-    return mdl
-
     try:
         checkpoint_path = os.path.join(os.getcwd(), DUMMY_CHECKPOINT_FNAME)
         print("Attempting to restore local testing checkpoint {}".format(checkpoint_path))
-        mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path)
+        mdl = Pix2Pix256RGBA.construct_inference_model(checkpoint_path, mdl_opts)
         return mdl
     except Exception as e:
         print(e)
@@ -68,7 +64,10 @@ def generate(model, args):
     print('[GENERATE]\n image_in: "{}"'.format(args['image_in']))
     output_image = args['image_in']
     size_in = args['image_in'].size
-    if model.generator: output_image = model.generate(args['image_in'])
+
+    if model.generator:
+        with torch.no_grad():
+            output_image = model.generate(args['image_in'])
 
     if output_image.size != size_in:
         print("Resizing output image from {} to {}".format(output_image.size, size_in ))

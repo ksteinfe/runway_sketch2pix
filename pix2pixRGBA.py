@@ -337,6 +337,7 @@ class Pix2Pix256RGBA():
             mdl.generator.load_state_dict(torch.load(pth_stat))
         else:
             print("...restoring to run on CPU")
+            mdl.generator.load_state_dict(torch.load(pth_stat, map_location=lambda storage, location: storage))
             #return torch.load(pth_g, map_location=lambda storage, location: storage).to(mdl.device)
 
         #mdl.generator.eval()
