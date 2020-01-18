@@ -2,6 +2,8 @@ import os, random, functools, shutil, glob, math
 import random
 from PIL import Image, ImageChops
 
+
+
 def load_img(filepath, do_resize=True):
     img = Image.open(filepath).convert('RGBA')
     if do_resize: img = img.resize((256, 256), Image.BICUBIC)
