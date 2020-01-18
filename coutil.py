@@ -1,8 +1,7 @@
 import IPython as ipy
 import os, datetime, time, glob, zipfile, shutil
 version_number = 0.1
-print('util module r{} has loaded.'.format(version_number))
-
+print('coutil r{} has loaded.'.format(version_number))
 
 
 def printHTML(s):
