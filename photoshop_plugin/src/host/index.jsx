@@ -92,11 +92,16 @@ function postInferenceMacro(twinLayerId, tarBounds, layerSetName, filename) {
   var w = bndsWidth(tarBounds);
   var h = bndsHeight(tarBounds);
 
-  // rename, resize, align, link
+  // scale placed image to expected dimension
+  var bndsPlcd = bndsToPxlDim(dstDoc.activeLayer.bounds);
+  dstDoc.activeLayer.resize( w/bndsWidth(bndsPlcd)*100,  h/bndsHeight(bndsPlcd)*100, AnchorPosition.TOPLEFT)
+  // align
+  var x = tarBounds[0] - bndsPlcd[0];
+  var y = tarBounds[1] - bndsPlcd[1];
+  dstDoc.activeLayer.translate(x,y);
+
+  // rename, link
   dstDoc.activeLayer.name = twinLayer.name;
-  var x = tarBounds[0] - (dstDoc.width/2 - w/2);
-  var y = tarBounds[1] - (dstDoc.height/2 - h/2);
-  dstDoc.activeLayer.translate(-x,-y);
   dstDoc.activeLayer.link(twinLayer);
   dstDoc.activeLayer.move(destLayerSet, ElementPlacement.INSIDE);
 

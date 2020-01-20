@@ -8,6 +8,7 @@ import torch
 
 
 DUMMY_CHECKPOINT_FNAME = "200118a_pretty_mushroom.pt"
+#DUMMY_CHECKPOINT_FNAME = "200118a_plaster.pt"
 
 # Setup the Model
 ########################################
@@ -68,6 +69,13 @@ def generate(model, args):
     if model.generator:
         with torch.no_grad():
             output_image = model.generate(args['image_in'])
+
+    # add registration pixels to corners
+    #pixels = output_image.load() # create the pixel map
+    clr_reg = (255,0,0,255)
+    output_image.putpixel((0, 0), clr_reg)
+    output_image.putpixel((255, 255), clr_reg)
+    #pixels[254,254] = (255,255,255,255)
 
     if output_image.size != size_in:
         print("Resizing output image from {} to {}".format(output_image.size, size_in ))

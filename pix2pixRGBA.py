@@ -14,7 +14,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-version_number = 0.2
+version_number = 0.0
 print('pix2pix r{} has loaded.'.format(version_number))
 
 class ImgUtil():
@@ -100,6 +100,10 @@ class Pix2PixDataset(data.Dataset):
                           transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))]
 
         return( transforms.Compose(transform_list) )
+
+    @staticmethod
+    def line_to_fill(line, rndr):
+        return Pix2PixDataset._fill_and_jiggle(line,rndr, Pix2PixDataset.FILL_COLOR, jig_amt=0, rot_amt=0, scl_amt=0)
 
     @staticmethod
     def _fill_and_jiggle(line, rndr, fill_color, jig_amt=None, rot_amt=None, scl_amt=None):
