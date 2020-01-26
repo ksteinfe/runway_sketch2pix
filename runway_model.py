@@ -8,7 +8,7 @@ import torch
 
 
 DUMMY_CHECKPOINT_FNAME = "200118a_pretty_mushroom.pt"
-#DUMMY_CHECKPOINT_FNAME = "200118a_plaster.pt"
+DUMMY_CHECKPOINT_FNAME = "200118a_plaster.pt"
 
 # Setup the Model
 ########################################

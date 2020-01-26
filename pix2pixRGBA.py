@@ -26,7 +26,9 @@ class ImgUtil():
     @staticmethod
     def find_corrupt_images(pth):
         bad_ones = []
-        for fname in [f for f in os.listdir(pth) if ImgUtil.verify_ext(f)]:
+        fnames = [f for f in os.listdir(pth) if ImgUtil.verify_ext(f)]
+        for n,fname in enumerate( fnames ):
+            if len(fnames)>2000 and n%500==0 and n>0: print("...checked {} of {} images.".format(n,len(fnames)))
             try:
                 img = ImgUtil.load_img(os.path.join(pth, fname), False)
                 transforms.ToTensor()(img)
@@ -35,10 +37,22 @@ class ImgUtil():
         return(bad_ones)
 
     @staticmethod
-    def load_img(filepath, do_resize=True):
-        img = Image.open(filepath).convert('RGBA')
+    def load_img(filepath, do_resize=True, do_flatten=False):
+        img = Image.open(filepath)
+        if img.mode == "RGBA" and do_flatten:
+            img = ImgUtil.img_alpha_to_color(img)
+
+        img = img.convert('RGBA')
         if do_resize: img = img.resize((Pix2Pix256RGBA.IMG_SIZE, Pix2Pix256RGBA.IMG_SIZE), Image.BICUBIC)
         return img
+
+    @staticmethod
+    def img_alpha_to_color(image, color=(255, 255, 255)):
+        """Alpha composite an RGBA Image with a specified color. Source: http://stackoverflow.com/a/9459208/284318 """
+        image.load()  # needed for split()
+        background = Image.new('RGB', image.size, color)
+        background.paste(image, mask=image.split()[3])  # 3 is the alpha channel
+        return background
 
     @staticmethod
     def imgten_to_imgpil(imgten):
@@ -82,7 +96,7 @@ class ImgUtil():
         plt.show()
 
 class Pix2PixDataset(data.Dataset):
-    FILL_COLOR = (200, 200, 200, 255)
+    FILL_COLOR = (224, 224, 224, 255)
 
     def __init__(self, extraction_rslt, direction="a2b"):
         super(Pix2PixDataset, self).__init__()
@@ -139,7 +153,7 @@ class Pix2PixDataset(data.Dataset):
 
     def __getitem__(self, index):
         # here, images are 'jittered': resized to 286 and then cropped back to 256
-        a = ImgUtil.load_img(self.pths_a[index])
+        a = ImgUtil.load_img(self.pths_a[index], do_flatten=True)
         b = ImgUtil.load_img(self.pths_b[index])
 
         a = Pix2PixDataset._fill_and_jiggle(a,b, Pix2PixDataset.FILL_COLOR )
@@ -184,7 +198,9 @@ class Pix2PixDataset(data.Dataset):
         ret = {}
         ret['fldrs'] = {'a':fldrs['a'], 'b':fldrs['b']}
         if check_for_corrupt:
+            print("checking directory a: {}".format(pth_a))
             ret['corrupt_images'] = ImgUtil.find_corrupt_images(pth_a)
+            print("checking directory b: {}".format(pth_b))
             ret['corrupt_images'].extend( ImgUtil.find_corrupt_images(pth_b) )
 
         # Determine the items that are image files and exist in both directories
