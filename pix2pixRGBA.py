@@ -37,7 +37,7 @@ class ImgUtil():
         return(bad_ones)
 
     @staticmethod
-    def load_img(filepath, do_resize=True, do_flatten=False):
+    def load_img(filepath, do_resize, do_flatten):
         img = Image.open(filepath)
         if img.mode == "RGBA" and do_flatten:
             img = ImgUtil.img_alpha_to_color(img)
@@ -151,11 +151,19 @@ class Pix2PixDataset(data.Dataset):
 
         return ImageChops.darker(back, fill)
 
-    def __getitem__(self, index):
-        # here, images are 'jittered': resized to 286 and then cropped back to 256
-        a = ImgUtil.load_img(self.pths_a[index], do_flatten=True)
-        b = ImgUtil.load_img(self.pths_b[index])
+    @staticmethod
+    def load_img_a(filepath):
+        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=True)
 
+    @staticmethod
+    def load_img_b(filepath):
+        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=False)
+
+    def __getitem__(self, index):
+        a = Pix2PixDataset.load_img_a(self.pths_a[index])
+        b = Pix2PixDataset.load_img_b(self.pths_b[index])
+
+        # here, images are 'jittered': resized to 286 and then cropped back to 256
         a = Pix2PixDataset._fill_and_jiggle(a,b, Pix2PixDataset.FILL_COLOR )
 
         jtr_amt = random.randint(10, 20)
