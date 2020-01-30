@@ -14,7 +14,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-version_number = 0.0
+version_number = 0.1
 print('pix2pix r{} has loaded.'.format(version_number))
 
 class ImgUtil():
@@ -30,7 +30,7 @@ class ImgUtil():
         for n,fname in enumerate( fnames ):
             if len(fnames)>2000 and n%500==0 and n>0: print("...checked {} of {} images.".format(n,len(fnames)))
             try:
-                img = ImgUtil.load_img(os.path.join(pth, fname), False)
+                img = ImgUtil.load_img(os.path.join(pth, fname), False, False)
                 transforms.ToTensor()(img)
             except:
                 bad_ones.append(fname)
