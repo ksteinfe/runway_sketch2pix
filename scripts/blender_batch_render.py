@@ -1,14 +1,15 @@
+import math, os, pathlib, sys
 import bpy, mathutils
-import math, os, pathlib
-
+from mathutils import Vector
 
 
 PTH_OUT = r"C:\Users\ksteinfe\Desktop\TEMP"
 pathlib.Path(PTH_OUT).mkdir(parents=False, exist_ok=True)
 
 
-VIEW_COUNT = 2
+VIEW_COUNT = 512
 IMG_SIZE = 512
+HALF_SPHERE = True
 
 def main(ctx):
     # get the current scene
@@ -18,21 +19,32 @@ def main(ctx):
     cfg = setup(scn)
     print(cfg)    
     
-    pts = fibonacci_lattice_pts(VIEW_COUNT, half_sphere=False)
+    pts = fibonacci_lattice_pts(VIEW_COUNT, half_sphere=HALF_SPHERE)
     
     for name_msh in cfg['names_msh']:
         msh = activate_mesh(name_msh, scn, cfg)
+        loc_msh = msh.location.copy()
+        
+        name_msh_nice = name_msh.lower().replace('.','_').replace(' ','_')
+        
+        print("=============================\n{}".format(name_msh_nice))
+        #print( "cam location is {}".format(scn.camera.location) )
+        #print( "mesh location is {}".format(loc_msh) )
         
         for n,pt in enumerate(pts):
+            print( "{} of {}".format(n,len(pts)) )
+            print("---")
             
             for name_vlr in cfg['names_vlr']:
                 activate_view_layer(name_vlr, scn, cfg)
                 
                 set_camera(pt, scn, cfg)
-                set_light(msh, scn, cfg) # set light after camera
+                set_light(loc_msh, scn, cfg) # set light after camera
                 
-                bpy.context.scene.render.filepath = os.path.join(cfg['pths_out'][name_vlr], "{}-{:03d}_{}.jpg".format(name_msh, n,name_vlr) )
-                bpy.ops.render.render(write_still = True)
+                fname = "{}-{:03d}_{}.jpg".format(name_msh_nice, n,name_vlr)
+                pth = os.path.join(cfg['pths_out'][name_vlr], fname )
+                
+                render_layer(pth)
         
         
     teardown(scn,cfg)
@@ -40,6 +52,9 @@ def main(ctx):
     
 def setup(scn):
     cfg = {}
+    
+    # set object seleciton mode
+    bpy.ops.object.mode_set(mode="OBJECT")
     
     # set render resolution
     scn.render.resolution_x = IMG_SIZE
@@ -95,7 +110,7 @@ def activate_view_layer(name, scn, cfg):
         else: layer.use = False
     
 def activate_mesh(name, scn, cfg):
-    print("activate_mesh {}".format(name))
+    #print("activate_mesh {}".format(name))
     ret = False
     for ob in scn.objects:
         if ob.type == "MESH": 
@@ -108,18 +123,22 @@ def activate_mesh(name, scn, cfg):
                 ob.select_set(state=False)
     
     if not ret: raise Exception("no mesh with name {} found.".format(name))
-    return ob
+    return ret
 
-def set_light(msh, scn, cfg):
+def set_light(loc_msh, scn, cfg):
     loc_cam = scn.camera.location
-    loc_msh = msh.location
+    
+    #print( "cam {}".format(scn.camera.location) )
+    #print( "msh {}".format(loc_msh) )
     
     vec_z = loc_msh - loc_cam # vec in direction of camera
     dist = vec_z.length # use dist from cam to msh as base distance
     vec_z.normalize()
     vec_z *= dist *0.5
     
-    vec_x = vec_z.cross(mathutils.Vector((0,0,1))) # vec to left of screen
+    #print("dist {}".format(dist))
+    
+    vec_x = vec_z.cross(Vector((0,0,1))) # vec to left of screen
     vec_x.normalize()
     vec_x *= -dist *0.5
     
@@ -149,6 +168,26 @@ def set_camera(pos, scn, cfg):
     cam.data.lens = cam.data.lens - 5
 
 
+def render_layer(pth_save):
+    bpy.context.scene.render.filepath = pth_save
+    
+    # redirect output to log file
+    logfile = os.path.join(PTH_OUT,"log.txt")
+    open(logfile, 'a').close()
+    old = os.dup(1)
+    sys.stdout.flush()
+    os.close(1)
+    os.open(logfile, os.O_WRONLY)
+
+    # do the rendering
+    bpy.ops.render.render(write_still=True)
+
+    # disable output redirection
+    os.close(1)
+    os.dup(old)
+    os.close(old)
+    
+    
 
 def fibonacci_lattice_pts(cnt, rad=1.0, half_sphere=True):
     if half_sphere: cnt *= 2
