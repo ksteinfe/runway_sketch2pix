@@ -15,6 +15,7 @@ DO_RENDER = True
 
 def main():
     cfg = setup()
+    rs.CurrentView(cfg['view'].ActiveViewportID)
     # MAIN LOOP
     print("plottting {} views across {} xforms.".format( len(cfg['view_locs']), len(cfg['xforms']) ) )
     print("{} images will result.".format( len(cfg['view_locs']) * len(cfg['xforms']) ) )
@@ -561,7 +562,7 @@ WorldAxesColor=0
 WxColor=150,75,75
 WyColor=75,150,75
 WzColor=0,0,150
-GroundPlaneUsage=1
+GroundPlaneUsage=0
 CustomGroundPlaneShow=n
 CustomGroundPlaneAltitude=0
 CustomGroundPlaneAutomaticAltitude=y
