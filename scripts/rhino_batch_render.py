@@ -212,6 +212,7 @@ def do_view_capture(cfg, fname):
 
 def do_render(cfg, fname):
     isolate_layer_rndr(cfg)
+    rs.CurrentView(cfg['view'].ActiveViewportID)
     rs.Command("_-Render")
     rs.Command("_-SaveRenderWindowAs {}".format( os.path.join(cfg['pth_save_render'],"{}.png".format(fname) ) ) )
     rs.Command("_-CloseRenderWindow")
