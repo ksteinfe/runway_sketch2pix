@@ -12,6 +12,11 @@ FILL_LAYER_NAME = "fill"
 
 DO_CAPTURE_VIEW = True
 DO_RENDER = True
+DO_PLOT_CAMPTS = False
+
+MODE_NAME_STR = "SCRIPT GENERATED {} - DELETE THIS"
+MODE_NAME_LINE = MODE_NAME_STR.format("LINE")
+MODE_NAME_FILL = MODE_NAME_STR.format("FILL")
 
 def main():
     cfg = setup()
@@ -45,15 +50,18 @@ def main():
         
 def setup():
     cfg = {}
+    delete_residual_display_modes()
     
     ## properties dialog
     #
     props = [
         ("view_count",2),
         ("image_size",512),
-        ("do_scale_1d", True),
-        ("do_scale_2d", True),
-        ("do_shear", True)
+        ("min_camera_percent",-80),
+        ("max_camera_percent",80),
+        ("do_scale_1d", "n"),
+        ("do_scale_2d", "n"),
+        ("do_shear", "n")
     ]
     results = False
     if DEBUG: results = [p[1] for p in props]
@@ -63,16 +71,17 @@ def setup():
         if results is None: exit()
     
     try:
-        cfg["view_count"]  = int(results[0])
-        cfg['size']        = int(results[1])
-        cfg["do_scale_1d"] = str(results[2]).lower() in ("y", "yes", "true", "t", "1")
-        cfg["do_scale_2d"] = str(results[3]).lower() in ("y", "yes", "true", "t", "1")
-        cfg["do_shear"]    = str(results[4]).lower() in ("y", "yes", "true", "t", "1")
+        cfg["view_count"]            = int(results[0])
+        cfg['size']                  = int(results[1])
+        cfg['min_camera_percent']    = 0.01 * int(results[2])
+        cfg['max_camera_percent']    = 0.01 * int(results[3])
+        cfg["do_scale_1d"]           = str(results[4]).lower() in ("y", "yes", "true", "t", "1")
+        cfg["do_scale_2d"]           = str(results[5]).lower() in ("y", "yes", "true", "t", "1")
+        cfg["do_shear"]              = str(results[6]).lower() in ("y", "yes", "true", "t", "1")
         
     except Exception as e:
-        print("There was a problem parsing the values given in the properties dialog.")
-        print(e)
-        exit()
+        big_problem("There was a problem parsing the values given in the properties dialog.")
+        
     
     ## lights
     #
@@ -93,7 +102,10 @@ def setup():
     
     ## views
     #
-    cfg['view_locs'] = fibonacci_lattice_pts(cfg["view_count"])
+    #print("Defining view locations:\n{}\t{}\t{}\t{}".format(cfg["view_count"], 1.0, cfg['min_camera_percent'], cfg['max_camera_percent']))
+    cfg['view_locs'] = fibonacci_lattice_pts(cfg["view_count"], rad=1.0, min_z=cfg['min_camera_percent'], max_z=cfg['max_camera_percent'])
+    if DO_PLOT_CAMPTS:
+        for pt in cfg['view_locs']: rs.AddPoint(pt)
     
     ## xforms
     #
@@ -114,19 +126,26 @@ def teardown(cfg):
     cfg['view'].Close()
     sc.doc.RenderSettings = cfg['render_settings']
     
-    
     for mode in cfg['display_modes'].keys():
-        pass
-        #if not Rhino.Display.DisplayModeDescription.DeleteDiplayMode(cfg['display_modes'][mode].Id): print("Temporary display mode {} was not deleted. Consider removing this yourself.".format(cfg['display_modes'][mode].EnglishName))
+        if not Rhino.Display.DisplayModeDescription.DeleteDiplayMode(cfg['display_modes'][mode].Id): 
+            print("Temporary display mode {} was not deleted. Consider removing this yourself.".format(cfg['display_modes'][mode].EnglishName))
     
+    delete_residual_display_modes()
     all_layers_on(cfg)
     return
     
+def delete_residual_display_modes():
+    dmds = Rhino.Display.DisplayModeDescription.GetDisplayModes()
+    for dmd in dmds:
+        if (MODE_NAME_LINE in dmd.EnglishName) or (MODE_NAME_FILL in dmd.EnglishName):
+            print("Deleting residual display mode {}".format(dmd.EnglishName))
+            if not Rhino.Display.DisplayModeDescription.DeleteDiplayMode(dmd.Id): 
+                print("Residual display mode {} was not deleted. Consider removing this yourself.".format(dmd.EnglishName))
     
 def initialize_directory(pth_root, init_fill_dir, layername, debug=False):
     print("Initializing save path: {}".format(pth_root))
     dir_cfg = {}
-    if not Directory.Exists(pth_root): raise("!!! Path does not exist.\nSelect a valid folder.\n{}".format(pth_root))
+    if not Directory.Exists(pth_root): big_problem("!!! Path does not exist.\nSelect a valid folder.\n{}".format(pth_root))
     
     filename = "unsavedfile"
     layername = layername.lower().replace(" ","_")
@@ -145,8 +164,7 @@ def initialize_directory(pth_root, init_fill_dir, layername, debug=False):
             break
             
     if not success:
-        print("!!!! failed to initalize save path.\nClear out the following path by hand.\n{}".format(pth_root))
-        exit()
+        big_problem("!!!! failed to initalize save path.\nClear out the following path by hand.\n{}".format(pth_root))
     
     dir_cfg['pth_save_render'] = os.path.join(dir_cfg['pth_save'],'rndr')
     dir_cfg['pth_save_line'] = os.path.join(dir_cfg['pth_save'],'line')
@@ -156,6 +174,11 @@ def initialize_directory(pth_root, init_fill_dir, layername, debug=False):
     if init_fill_dir: Directory.CreateDirectory(dir_cfg['pth_save_fill'])
     
     return dir_cfg
+    
+    
+def big_problem(msg):
+    rs.MessageBox(msg, 16)
+    raise Exception(msg)
     
 ####################################################
 
@@ -244,10 +267,9 @@ def setup_layers(cfg):
                     cfg['layer_info'][FILL_LAYER_NAME] = lyr
                     break
     except Exception as e:
-        print("There was a problem with the selected layer.")
-        print(e)
-        exit()
+        big_problem("There was a problem with the selected layer.\n{}".format(e))
         
+    cfg['layer_info']['parent'].IsVisible = True
     return
 
 def get_layer_info(root_layer_name):
@@ -299,16 +321,22 @@ def all_layers_on(cfg):
 
 ####################################################
 
-def fibonacci_lattice_pts(cnt, rad=1.0, half_sphere=True):
-    if half_sphere: cnt *= 2
+def fibonacci_lattice_pts(dcnt, rad=1.0, min_z=-0.8, max_z=0.8):
+    if min_z>=max_z: big_problem("Cannot define view locations with these parameters. Please ensure that min is less than max.\nmin_z: {}  max_z: {}".format(min_z,max_z))
+    
+    cnt = int( dcnt * (1.0/(max_z-min_z) * 2) ) + 2 # adjust count to roughly match the desired z range. add two at the end for padding.
+    print("count adjusted to {} from {}".format(cnt,dcnt))
+    if cnt<=0: big_problem("No view locations were produced!")
+    
     phi = ( 1.0 + math.sqrt ( 5.0 ) ) / 2.0
     i2 = [ 2*i-(cnt-1) for i in range(cnt) ]
     theta = [ 2.0*math.pi*float(i2[i])/phi for i in range(cnt) ]
     sphi = [ float(i2[i])/float(cnt) for i in range(cnt) ]
     cphi = [ math.sqrt(float(cnt+i2[i])*float(cnt-i2[i])) / float(cnt) for i in range(cnt) ]
     crds = [ (cphi[i]*math.sin(theta[i])*rad , cphi[i]*math.cos(theta[i])*rad , sphi[i]*rad ) for i in range(cnt) ]    
-    if half_sphere: crds = filter(lambda pt: pt[2] >= 0, crds )
-    return crds
+    crds = filter(lambda pt: pt[2] >= min_z*rad and pt[2] <= max_z*rad, crds )
+    print("produced {} pts. will slice down to {}".format(len(crds),dcnt))
+    return crds[:dcnt] # slice down to desired size
 
 def setup_lights(cfg):
     cfg['light'] = False
@@ -321,9 +349,7 @@ def setup_lights(cfg):
         if not cfg['light']:
             raise Exception("No directional lights were found in this model.\nPlease create a directional light using the 'DirectionalLight' command.")
     except Exception as e:
-        print("There was a problem setting up the lights.")
-        print(e)
-        exit()
+        big_problem("There was a problem setting up the lights.\n{}".format(e))
         
     return
 
@@ -421,7 +447,7 @@ def setup_display_modes(cfg):
     # LINE
     # 
     disp_param_line = {
-        'Name':'SCRIPT GENERATED LINE - DELETE THIS',
+        'Name':MODE_NAME_LINE,
         'GUID':uuid.uuid4(),
         'PipelineId':"e1eb7363-87f2-4a2b-a861-256e77835369",
         'CurveColor':'0,0,0', # CurveColor color
@@ -450,7 +476,7 @@ def setup_display_modes(cfg):
     # FILL
     # 
     disp_param_fill = {
-        'Name':'SCRIPT GENERATED FILL - DELETE THIS',
+        'Name':MODE_NAME_FILL,
         'GUID':uuid.uuid4(),
         'PipelineId':"952b2830-ce8a-4b4f-935a-8cd570d162c7",
         'FrontMaterialOverrideObjectColor':'y',
