@@ -34,7 +34,7 @@ def main():
             apply_xf(xf,cfg) # apply transformation
             
             for c,cam in enumerate(cfg['view_locs']):
-                do_capture(cam, "{:04}_{:02}".format(c,x), cfg) # capture view
+                do_capture(cam, "{}_{:04}_{:02}".format(cfg['layer_info']['parent'].Name.lower(),c,x), cfg) # capture view
             
             all_layers_on(cfg)
             apply_xf( rs.XformInverse(xf),cfg ) # restore transformation
@@ -237,7 +237,7 @@ def do_render(cfg, fname):
     isolate_layer_rndr(cfg)
     rs.CurrentView(cfg['view'].ActiveViewportID)
     rs.Command("_-Render")
-    rs.Command("_-SaveRenderWindowAs {}".format( os.path.join(cfg['pth_save_render'],"{}.png".format(fname) ) ) )
+    rs.Command('_-SaveRenderWindowAs "{}"'.format( os.path.join(cfg['pth_save_render'],"{}.png".format(fname) ) ) )
     rs.Command("_-CloseRenderWindow")
     
 ####################################################
