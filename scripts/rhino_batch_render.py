@@ -184,7 +184,7 @@ def big_problem(msg):
 
 def do_capture(loc, name, cfg):
     #print("view {} of {}".format(m+1,len(locs)))
-    set_camera(cfg, loc)
+    set_camera(loc, cfg)
     align_light_to_camera(cfg) 
     
     Rhino.RhinoApp.Wait()
@@ -198,7 +198,7 @@ def do_capture(loc, name, cfg):
     
     # delete_light_by_id(light_id)
 
-def set_camera(cfg, crds):
+def set_camera(crds, cfg):
     pos = Rhino.Geometry.Point3d(*crds)
     tar = Rhino.Geometry.Point3d(0,0,0)
     all_layers_on(cfg)
@@ -512,7 +512,7 @@ def setup_floating_viewport(cfg):
     x,y = 100, 200 # position of floating window relative to the screen (not Rhino)
     cfg['view'] = sc.doc.Views.Add("ksteinfe",Rhino.Display.DefinedViewportProjection.Top,System.Drawing.Rectangle(x,y,cfg['size'],cfg['size']),True)
     isolate_layer_line(cfg)
-    activate_display_mode(cfg, "line")
+    activate_display_mode(cfg, "fill")
 
 def setup_render_settings(cfg):
     rset = sc.doc.RenderSettings
