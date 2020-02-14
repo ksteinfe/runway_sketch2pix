@@ -5,6 +5,7 @@ import scriptcontext as sc
 import rhinoscriptsyntax as rs
 
 DEBUG = False
+DEFAULT_VIEW_COUNT = 3
 
 DEFAULT_SAVE_PATH = r"C:\Users\ksteinfe\Desktop\TEMP"
 REQUIRED_LAYERS = ["rndr", "line"]
@@ -21,7 +22,9 @@ def main():
     cfg = setup()
     rs.CurrentView(cfg['view'].ActiveViewportID)
     # MAIN LOOP
-    print("plottting {} views".format( cfg['view_count'] ) )
+    fake_xf = xforms_to_apply(cfg['groups_info'][0]['bbox'], cfg, DEBUG)
+    print("plottting {} views across {} xforms of {} objects.".format( cfg['view_count'], len(fake_xf), len(cfg['groups_info']) ) )
+    print("{} images will result.".format( cfg['view_count'] * len(fake_xf) * len(cfg['groups_info']) ) )
     
     """
     group_info = cfg['groups_info'][0]
@@ -32,6 +35,7 @@ def main():
     """
     
     try:
+        #raise Exception("nope")
         
         for g,group_info in enumerate(cfg['groups_info']):
             print("##### group {} of {}".format(g+1,len(cfg['groups_info'])))
@@ -82,7 +86,7 @@ def setup():
     ## properties dialog
     #
     props = [
-        ("view_count",6),
+        ("view_count",DEFAULT_VIEW_COUNT),
         ("image_size",512),
         ("zoom_padding_percent",30),
         ("iso (NE, NW, SE, or SW)","SE"),
@@ -149,6 +153,11 @@ def setup():
 def teardown(cfg):
     print("teardown")
     cfg['view'].Close()
+    """
+    activate_display_mode(cfg['view_restore']['disp_mode'], cfg)
+    cfg['view'].Maximized = cfg['view_restore']['maximized']
+    cfg['view'].Size = cfg['view_restore']['size']
+    """
     show_all_groups(cfg)
     sc.doc.RenderSettings = cfg['render_settings']
     
@@ -214,7 +223,8 @@ def setup_groups(cfg):
         name_grps = set()
         for id in obj_guids: 
             gnms = rs.ObjectGroups(id)
-            if len(gnms)==0: raise Exception("One or more of the selected objects was not in a group. Everything must be grouped!")
+            if len(gnms)==0: raise Exception("One or more of the selected objects was not in a group.\nEverything must be grouped!")
+            if len(gnms)>1: raise Exception("One or more of the selected objects was in more than one group.\nEverything must be in exactly one group!")
             name_grps.update(gnms)
             
         for name_grp in list(name_grps):
@@ -474,8 +484,8 @@ def setup_display_modes(cfg):
         
         'TEThickness':1, # Edge thickness
         'TSiThickness':3, # Silhouette thickness
-        'TEColor':'128,128,128', # technical edge color
-        'TSiColor':'1,1,1', # technical silhouette color
+        'TEColor':'64,64,64', # technical edge color
+        'TSiColor':'0,0,0', # technical silhouette color
     }
     
     pth_ini_line = cfg['pth_save'] + r"\line.ini"
@@ -526,7 +536,17 @@ def setup_display_modes(cfg):
     
 def setup_floating_viewport(cfg):
     x,y = 100, 200 # position of floating window relative to the screen (not Rhino)
-    cfg['view'] = sc.doc.Views.Add("ksteinfe",Rhino.Display.DefinedViewportProjection.Top,System.Drawing.Rectangle(x,y,cfg['size'],cfg['size']),True)
+    cfg['view'] = sc.doc.Views.Add("SCRIPT",Rhino.Display.DefinedViewportProjection.Top,System.Drawing.Rectangle(x,y,cfg['size'],cfg['size']),False)
+    """
+    cfg['view'] = sc.doc.Views.ActiveView
+    cfg['view_restore'] = {
+        "maximized" : cfg['view'].Maximized,
+        "disp_mode" : cfg['view'].ActiveViewport.DisplayMode,
+        "size" : cfg['view'].Size
+    }
+    cfg['view'].Maximized = False
+    cfg['view'].Size = System.Drawing.Size(cfg['size'],cfg['size'])
+    """
     set_camera(cfg['groups_info'][0]['bbox'], cfg)
     isolate_group(0,cfg)
     activate_display_mode(cfg['display_modes']['rndr'], cfg)
