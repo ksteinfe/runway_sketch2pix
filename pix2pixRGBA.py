@@ -14,7 +14,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-version_number = 0.1
+version_number = 1.0
 print('pix2pix r{} has loaded.'.format(version_number))
 
 class ImgUtil():
