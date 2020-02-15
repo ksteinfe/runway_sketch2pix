@@ -48,7 +48,7 @@ class ImgUtil():
 
     @staticmethod
     def img_alpha_to_color(image, color=(255, 255, 255)):
-        """Alpha composite an RGBA Image with a specified color. Source: http://stackoverflow.com/a/9459208/284318 """
+        """Alpha composited an RGBA Image with a specified color. Source: http://stackoverflow.com/a/9459208/284318 """
         image.load()  # needed for split()
         background = Image.new('RGB', image.size, color)
         background.paste(image, mask=image.split()[3])  # 3 is the alpha channel
@@ -97,16 +97,15 @@ class ImgUtil():
 
 class Pix2PixDataset(data.Dataset):
     FILL_COLOR = (224, 224, 224, 255)
+    JIG_AMT_DEFAULT = 4
+    ROT_AMT_DEFAULT = 2
+    SCL_AMT_DEFAULT = 0.1
 
     def __init__(self, extraction_rslt, direction="a2b"):
         super(Pix2PixDataset, self).__init__()
         self.direction = direction
-
-        self.pths_a = extraction_rslt['pths_a']
-        self.pths_b = extraction_rslt['pths_b']
-        for pa, pb in zip(self.pths_a, self.pths_b):
-            if os.path.splitext(os.path.basename(pa))[0] != os.path.splitext(os.path.basename(pb))[0]:
-                raise Exception("Dataset contains a non-matching pair.\n{}\n{}".format(pa,pb))
+        self.is_compound = extraction_rslt['is_compound']
+        self.pths = extraction_rslt['pths']
 
     @staticmethod
     def tform():
@@ -115,15 +114,47 @@ class Pix2PixDataset(data.Dataset):
 
         return( transforms.Compose(transform_list) )
 
+    """
     @staticmethod
     def line_to_fill(line, rndr):
         return Pix2PixDataset._fill_and_jiggle(line,rndr, Pix2PixDataset.FILL_COLOR, jig_amt=0, rot_amt=0, scl_amt=0)
 
     @staticmethod
-    def _fill_and_jiggle(line, rndr, fill_color, jig_amt=None, rot_amt=None, scl_amt=None):
-        if jig_amt is None: jig_amt = 4
-        if rot_amt is None: rot_amt = 2
-        if scl_amt is None: scl_amt = 0.1
+    def load_img_a(filepath):
+        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=True)
+
+    @staticmethod
+    def load_img_b(filepath):
+        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=False)
+    """
+
+    @staticmethod
+    def _filled_a_from_composite(a0,a1, jig_amt=None, rot_amt=None, scl_amt=None):
+        if jig_amt is None: jig_amt = Pix2PixDataset.JIG_AMT_DEFAULT
+        if rot_amt is None: rot_amt = Pix2PixDataset.ROT_AMT_DEFAULT
+        if scl_amt is None: scl_amt = Pix2PixDataset.SCL_AMT_DEFAULT
+        jig_amt = int(jig_amt/2)
+
+        a0 = ImgUtil.img_alpha_to_color(a0).convert('RGBA')
+        a1 = ImgUtil.img_alpha_to_color(a1).convert('RGBA')
+
+        # rotate
+        a0 = a0.rotate( random.randint(-rot_amt,rot_amt) , Image.BICUBIC, fillcolor='white' )
+        a1 = a1.rotate( random.randint(-rot_amt,rot_amt) , Image.BICUBIC, fillcolor='white' )
+
+        # jiggle
+        a0n = Image.new('RGBA', a0.size, (255, 255, 255, 255))
+        a0n.paste(a0, (random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)))
+        a1n = Image.new('RGBA', a1.size, (255, 255, 255, 255))
+        a1n.paste(a1, (random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)))
+
+        return ImageChops.darker(a0n, a1n)
+
+    @staticmethod
+    def _filled_a_from_b_alpha(line, rndr, fill_color, jig_amt=None, rot_amt=None, scl_amt=None):
+        if jig_amt is None: jig_amt = Pix2PixDataset.JIG_AMT_DEFAULT
+        if rot_amt is None: rot_amt = Pix2PixDataset.ROT_AMT_DEFAULT
+        if scl_amt is None: scl_amt = Pix2PixDataset.SCL_AMT_DEFAULT
         jig_amt = int(jig_amt/2)
         dim = rndr.size[0]
 
@@ -151,21 +182,17 @@ class Pix2PixDataset(data.Dataset):
 
         return ImageChops.darker(back, fill)
 
-    @staticmethod
-    def load_img_a(filepath):
-        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=True)
-
-    @staticmethod
-    def load_img_b(filepath):
-        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=False)
-
     def __getitem__(self, index):
-        a = Pix2PixDataset.load_img_a(self.pths_a[index])
-        b = Pix2PixDataset.load_img_b(self.pths_b[index])
+        b = ImgUtil.load_img(self.pths[index]['b'], do_resize=True, do_flatten=False)
+        if self.is_compound:
+            a0 = ImgUtil.load_img(self.pths[index]['a0'], do_resize=True, do_flatten=False)
+            a1 = ImgUtil.load_img(self.pths[index]['a1'], do_resize=True, do_flatten=False)
+            a = Pix2PixDataset._filled_a_from_composite(a0,a1)
+        else:
+            a = ImgUtil.load_img(self.pths[index]['a0'], do_resize=True, do_flatten=True)
+            a = Pix2PixDataset._filled_a_from_b_alpha(a,b, Pix2PixDataset.FILL_COLOR )
 
         # here, images are 'jittered': resized to 286 and then cropped back to 256
-        a = Pix2PixDataset._fill_and_jiggle(a,b, Pix2PixDataset.FILL_COLOR )
-
         jtr_amt = random.randint(10, 20)
         jtr_sze = 256+jtr_amt
 
@@ -194,31 +221,77 @@ class Pix2PixDataset(data.Dataset):
         return b, a
 
     def __len__(self):
-        return len(self.pths_a)
+        return len(self.pths)
 
     @staticmethod
     def verify_extracted_data(pth, fldrs, check_for_corrupt=True):
-        pth_a = os.path.join(pth,fldrs['a'])
-        pth_b = os.path.join(pth,fldrs['b'])
-        if not os.path.exists(pth_a) or not os.path.exists(pth_b):
-            raise Exception("!!!! Extracted data is not valid. Check the names of any subfolders.")
-
         ret = {}
-        ret['fldrs'] = {'a':fldrs['a'], 'b':fldrs['b']}
+        ret['pth_parent'] = pth
+        ret['fldrs'] = {'a0':fldrs['line'], 'a1':False, 'b':fldrs['rndr']}
+
+        pth_a0 = os.path.join(pth,fldrs['line'])
+        if not os.path.exists(pth_a0): raise Exception("!!!! Extracted data is not valid. The {} folder does not exist at the top level of the extracted ZIP.".format(fldrs['line']))
+
+        pth_b = os.path.join(pth,fldrs['rndr'])
+        if not os.path.exists(pth_b): raise Exception("!!!! Extracted data is not valid. The {} folder does not exist at the top level of the extracted ZIP.".format(fldrs['rndr']))
+
+        ret['is_compound'] = False
+        pth_a1 = False
+        if 'fill' in fldrs and os.path.exists(os.path.join(pth,fldrs['fill'])):
+            ret['fldrs']['a1'] = fldrs['fill']
+            pth_a1 = os.path.join(pth,fldrs['fill'])
+            ret['is_compound'] = True
+
+        if not ret['is_compound']: print("No fill folder defined or none found in extracted data.\nFill data will be generated from alpha channel of render.")
+
         if check_for_corrupt:
-            print("checking directory a: {}".format(pth_a))
-            ret['corrupt_images'] = ImgUtil.find_corrupt_images(pth_a)
+            print("checking directory a0: {}".format(pth_a0))
+            ret['corrupt_images'] = ImgUtil.find_corrupt_images(pth_a0)
+            if ret['is_compound']:
+                print("checking directory a1: {}".format(pth_a1))
+                ret['corrupt_images'] = ImgUtil.find_corrupt_images(pth_a1)
             print("checking directory b: {}".format(pth_b))
             ret['corrupt_images'].extend( ImgUtil.find_corrupt_images(pth_b) )
 
-        # Determine the items that are image files and exist in both directories
-        a_set = set([os.path.splitext(f)[0] for f in os.listdir(pth_a) if ImgUtil.verify_ext(f)])
-        b_set = set([os.path.splitext(f)[0] for f in os.listdir(pth_b) if ImgUtil.verify_ext(f)])
-        ret['common_prefixes'] = list(a_set & b_set)
-        ret['orphans'] = list(a_set - b_set) + list(b_set - a_set)
 
-        ret['pths_a'] = sorted([os.path.join(pth_a, f) for f in os.listdir(pth_a) if any([f.startswith(pfix) for pfix in ret['common_prefixes']])])
-        ret['pths_b'] = sorted([os.path.join(pth_b, f) for f in os.listdir(pth_b) if any([f.startswith(pfix) for pfix in ret['common_prefixes']])])
+        # Determine the items that are image files and exist in all directories
+        def prefix_ext_sets(pth):
+            tups = [os.path.splitext(f) for f in os.listdir(pth) if ImgUtil.verify_ext(f)]
+            return set([t[0] for t in tups]), set([t[1] for t in tups])
+
+        pfixs_a0, extn_a0 = prefix_ext_sets(pth_a0)
+        pfixs_a1, extn_a1 = prefix_ext_sets(pth_a1) if ret['is_compound'] else (False, False)
+        pfixs_b, extn_b = prefix_ext_sets(pth_b)
+
+        if len(list(extn_a0)) != 1: raise Exception("!!!! More than one file extension found in a subfolder:\n{}".format(extn_a0))
+        if ret['is_compound'] and (len(list(extn_a1)) != 1): raise Exception("!!!! More than one file extension found in a subfolder:\n{}".format(extn_a1))
+        if len(list(extn_b)) != 1: raise Exception("!!!! More than one file extension found in a subfolder:\n{}".format(extn_b))
+
+        extn_a0 = list(extn_a0)[0]
+        extn_a1 = list(extn_a1)[0] if ret['is_compound'] else False
+        extn_b = list(extn_b)[0]
+        print("... discovered the following unique extensions: \n\t{}:'{}'\n\t{}:'{}'".format(ret['fldrs']['a0'], extn_a0, ret['fldrs']['b'], extn_b))
+        if ret['is_compound']: print("\t{}:'{}'".format(ret['fldrs']['a1'], extn_a1))
+
+        common_prefixes = False
+        if ret['is_compound']:
+            common_prefixes = list(pfixs_a0 & pfixs_a1 & pfixs_b)
+            ret['orphans'] = list(pfixs_a0 - set(common_prefixes)) + list(pfixs_a1 - set(common_prefixes)) + list(pfixs_b - set(common_prefixes))
+            ret['orphans'] = list(set(ret['orphans']))
+        else:
+            common_prefixes = list(pfixs_a0 & pfixs_b)
+            ret['orphans'] = list(pfixs_a0 - pfixs_b) + list(pfixs_b - pfixs_a0)
+
+        ret['pths'] = []
+        for pfix in common_prefixes:
+            d = {'pfix':pfix, 'a0':os.path.join(pth_a0, "{}{}".format(pfix,extn_a0) ), 'b':os.path.join(pth_b, "{}{}".format(pfix,extn_b) )}
+            if ret['is_compound']: d['a1'] = os.path.join(pth_a1, "{}{}".format(pfix,extn_a1) )
+            ret['pths'].append( d )
+
+        #ret['pths_a0'] = sorted([os.path.join(pth_a0, f) for f in os.listdir(pth_a0) if any([f.startswith(pfix) for pfix in ret['common_prefixes']])])
+        #ret['pths_b'] = sorted([os.path.join(pth_b, f) for f in os.listdir(pth_b) if any([f.startswith(pfix) for pfix in ret['common_prefixes']])])
+        #ret['pths_a1'] = False
+        #if pth_a1: ret['pths_a1'] = sorted([os.path.join(pth_a1, f) for f in os.listdir(pth_a1) if any([f.startswith(pfix) for pfix in ret['common_prefixes']])])
 
         return ret
 
@@ -246,15 +319,23 @@ class Pix2PixDataset(data.Dataset):
                 os.makedirs(pth)
 
         purge_dir(dinfo.pth_vald)
-        pth_a = os.path.join(dinfo.pth_vald, extraction_rslt['fldrs']['a'])
+        pth_a0 = os.path.join(dinfo.pth_vald, extraction_rslt['fldrs']['a0'])
+        pth_a1 = os.path.join(dinfo.pth_vald, extraction_rslt['fldrs']['a1']) if extraction_rslt['is_compound'] else False
         pth_b = os.path.join(dinfo.pth_vald, extraction_rslt['fldrs']['b'])
-        os.makedirs(pth_a)
+        os.makedirs(pth_a0)
+        if extraction_rslt['is_compound']: os.makedirs(pth_a1)
         os.makedirs(pth_b)
         for idx in val_dataset.indices:
-            src_a = all_dataset.pths_a[idx]
-            shutil.copyfile(src_a, os.path.join(pth_a, os.path.basename(src_a) ))
-            src_b = all_dataset.pths_b[idx]
+            src_a0 = all_dataset.pths[idx]['a0']
+            shutil.copyfile(src_a0, os.path.join(pth_a0, os.path.basename(src_a0) ))
+            src_b = all_dataset.pths[idx]['b']
             shutil.copyfile(src_b, os.path.join(pth_b, os.path.basename(src_b) ))
+            if extraction_rslt['is_compound']:
+                src_a1 = all_dataset.pths[idx]['a1']
+                shutil.copyfile(src_a1, os.path.join(pth_a1, os.path.basename(src_a1) ))
+
+
+
 
         return val_dataset, test_dataset, train_dataset
 
