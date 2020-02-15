@@ -5,7 +5,7 @@ import scriptcontext as sc
 import rhinoscriptsyntax as rs
 
 DEBUG = False
-DEFAULT_VIEW_COUNT = 5
+DEFAULT_VIEW_COUNT = 3
 
 DEFAULT_SAVE_PATH = r"C:\Users\ksteinfe\Desktop\TEMP"
 REQUIRED_LAYERS = ["rndr", "line"]
@@ -74,8 +74,9 @@ def main():
                     xbbox = bbox_of_objects(cfg['tmp_obj_ids'])
                     set_camera(xbbox, cfg)
                     
-                    name = "g{:02}_r{:03}_x{:02}_{}".format(g,r,x,cfg['layer_info']['parent'].Name.lower())
-                    do_capture(name,cfg) # capture view
+                    name = "{}_r{:03}_x{:02}_{}".format(group_info['name'].lower(),r,x,cfg['layer_info']['parent'].Name.lower())
+                    is_first = (r==0 and x==0)
+                    do_capture(name,is_first, cfg) # capture view
                     
                     isolate_group(g,cfg)
                     all_layers_on(cfg)
@@ -310,16 +311,16 @@ def bbox_of_objects(guids, pad=0.25):
 
 ####################################################
 
-def do_capture(name, cfg):    
+def do_capture(name, is_first, cfg):    
     Rhino.RhinoApp.Wait()
     if (sc.escape_test(False)): raise Exception('Esc key caught pre-render in do_capture()')  
     
-    if DO_CAPTURE_VIEW: do_view_capture(cfg, name)
+    if DO_CAPTURE_VIEW: do_view_capture(name, is_first, cfg)
     
     Rhino.RhinoApp.Wait()
     if (sc.escape_test(False)): raise Exception('Esc key caught post-render in do_capture()')     
     
-def do_view_capture(cfg, fname):
+def do_view_capture(fname, is_first, cfg):
     # https://discourse.mcneel.com/t/viewcapture-displayed-lineweights-bug/67610/9
     def view_cap():
         vc = Rhino.Display.ViewCapture()
@@ -342,8 +343,10 @@ def do_view_capture(cfg, fname):
     
     activate_display_mode(cfg['display_modes']['rndr'], cfg)
     bmp = view_cap().CaptureToBitmap(cfg['view'])
-    bmp.Save( os.path.join(cfg['pth_save_rndr'], "{}.png".format(fname) ) )  
-    
+    bmp.Save( os.path.join(cfg['pth_save_rndr'], "{}.png".format(fname) ) ) 
+    if is_first:
+        bmp.Save( os.path.join(cfg['pth_save'], "{}.png".format(fname) ) )
+        
     if cfg['do_capture_fill']:
         isolate_layer_fill(cfg)
         activate_display_mode(cfg['display_modes']['fill'], cfg)
