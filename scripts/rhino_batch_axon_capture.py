@@ -5,13 +5,22 @@ import scriptcontext as sc
 import rhinoscriptsyntax as rs
 
 DEBUG = False
-DEFAULT_VIEW_COUNT = 3
+DEFAULT_VIEW_COUNT = 5
 
 DEFAULT_SAVE_PATH = r"C:\Users\ksteinfe\Desktop\TEMP"
 REQUIRED_LAYERS = ["rndr", "line"]
 FILL_LAYER_NAME = "fill"
 
 DO_CAPTURE_VIEW = True
+
+LINE_CURV_COLOR = '0,0,0'   # color of Rhino curve objects on the 'line' layer
+LINE_CURV_THICK = 5         # thickness of Rhino curve objects on the 'line' layer
+LINE_SILH_COLOR = '0,0,0'   # color of mesh and surface silhouettes on the 'line' layer
+LINE_SILH_THICK = 3         # thickness of mesh and surface silhouettes on the 'line' layer
+LINE_EDGE_COLOR = '32,32,32'# color of mesh and surface fold lines on the 'line' layer
+LINE_EDGE_THICK = 2         # thickness of mesh and surface fold lines on the 'line' layer
+FILL_CURV_THICK = 10        # thickness of Rhino curve objects on the 'fill' layer
+FILL_COLR = '224,224,224'   # color of all fills on the 'fill' layer
 
 MODE_NAME_STR = "SCRIPT GENERATED {} - DELETE THIS"
 MODE_NAME_LINE = MODE_NAME_STR.format("LINE")
@@ -34,6 +43,10 @@ def main():
     exit()
     """
     
+    cfg['tmp_obj_ids'] = False
+    cfg['rot_group'] = False
+    cfg['tot_rot'] = False
+    
     try:
         #raise Exception("nope")
         
@@ -45,16 +58,20 @@ def main():
             
             deg = 360.0/cfg['view_count']
             rxf = rs.XformRotation2(deg, (0,0,1), group_info['bbox'].Center)
+            
+            cfg['rot_group'] = group_info
+            cfg['tot_rot'] = 0
+            
             for r in range(cfg['view_count']):
             
                 for x,xf in enumerate( xforms_to_apply(group_info['bbox'], cfg, DEBUG) ):
                     
                     all_layers_on(cfg)
-                    xfd_obj_ids = apply_xf(xf,group_info['obj_ids']) # apply this transformation
-                    rs.RemoveObjectsFromGroup(xfd_obj_ids,group_info['name'])
+                    cfg['tmp_obj_ids'] = apply_xf(xf,group_info['obj_ids']) # apply this transformation
+                    rs.RemoveObjectsFromGroup(cfg['tmp_obj_ids'],group_info['name'])
                     rs.HideGroup(group_info['name'])
                     
-                    xbbox = bbox_of_objects(xfd_obj_ids)
+                    xbbox = bbox_of_objects(cfg['tmp_obj_ids'])
                     set_camera(xbbox, cfg)
                     
                     name = "g{:02}_r{:03}_x{:02}_{}".format(g,r,x,cfg['layer_info']['parent'].Name.lower())
@@ -62,14 +79,17 @@ def main():
                     
                     isolate_group(g,cfg)
                     all_layers_on(cfg)
-                    rs.DeleteObjects(xfd_obj_ids)
-                    
+                    rs.DeleteObjects(cfg['tmp_obj_ids'])
+                    cfg['tmp_obj_ids'] = False
                     
                     Rhino.RhinoApp.Wait()
                     if (sc.escape_test(False)): raise Exception('Esc key caught in main()')
                     
                 rs.TransformObjects(group_info['obj_ids'], rxf)
-            #rs.TransformObjects(group_info['obj_ids'], rxf) # one last time puts things back?
+                cfg['tot_rot'] += deg
+            
+            cfg['rot_group'] = False
+            cfg['tot_rot'] = 0
         
                     
     except Exception as e:
@@ -90,7 +110,7 @@ def setup():
         ("image_size",512),
         ("zoom_padding_percent",30),
         ("iso (NE, NW, SE, or SW)","SE"),
-        ("do_scale_1d", "n"),
+        ("do_scale_1d", "y"),
         ("do_scale_2d", "n"),
         ("do_shear", "n")
     ]
@@ -158,6 +178,15 @@ def teardown(cfg):
     cfg['view'].Maximized = cfg['view_restore']['maximized']
     cfg['view'].Size = cfg['view_restore']['size']
     """
+    if cfg['tmp_obj_ids']: 
+        print("... deleting xformed objects")
+        rs.DeleteObjects(cfg['tmp_obj_ids'])
+        
+    if cfg['rot_group']:
+        print("... rotating objects back to their starting position")
+        rxf = rs.XformRotation2(-cfg['tot_rot'], (0,0,1), cfg['rot_group']['bbox'].Center)
+        rs.TransformObjects(cfg['rot_group']['obj_ids'], rxf)
+    
     show_all_groups(cfg)
     sc.doc.RenderSettings = cfg['render_settings']
     
@@ -407,23 +436,24 @@ def all_layers_on(cfg):
 def xforms_to_apply(bbox, cfg, do_limit):
     s = 1.618
     s2 = s/2.0
+    ctr = bbox.Center
+    ctr.Z = 0    
+    
     ret = [Rhino.Geometry.Transform.Identity]
     #if do_limit: return ret
     if cfg["do_scale_1d"]: 
         ret.extend([
-        xf_scale((1, 1, s)),
-        xf_scale((1, s, 1)),
-        xf_scale((s, 1, 1))
+        xf_scale(ctr, (1, 1, s)),
+        xf_scale(ctr, (1, s, 1)),
+        xf_scale(ctr, (s, 1, 1))
     ])
     if cfg["do_scale_2d"]: 
         ret.extend([
-        xf_scale((1, s, s)),
-        xf_scale((s, 1, s)),
-        xf_scale((s, s, 1))
+        xf_scale(ctr, (1, s, s)),
+        xf_scale(ctr, (s, 1, s)),
+        xf_scale(ctr, (s, s, 1))
     ]),
     if cfg["do_shear"]:
-        ctr = bbox.Center
-        ctr.Z = 0
         ret.extend([
         xf_shear(ctr, vz=(s2,0,1)),
         xf_shear(ctr, vz=(0,s2,1)),
@@ -431,12 +461,11 @@ def xforms_to_apply(bbox, cfg, do_limit):
     ])
     return ret
     
-def xf_scale(scale=(1,1,1)):
-    if 0 in scale:
-        print("you want to scale to 0%?")
-        exit()
+def xf_scale(ctr, scale=(1,1,1)):
+    if 0 in scale: raise Exception("Attempted to scale by 0%")
+    pln = rs.MovePlane(rs.WorldXYPlane(), ctr)
     xs,ys,zs = scale
-    xform = Rhino.Geometry.Transform.Scale(rs.WorldXYPlane(), xs, ys, zs)
+    xform = Rhino.Geometry.Transform.Scale(pln, xs, ys, zs)
     return xform
     
 def xf_shear(ctr, vx=(1,0,0),vy=(0,1,0),vz=(0,0,1)):
@@ -454,6 +483,7 @@ def apply_xf(xf,obj_ids):
     return(new_obj_ids)
     
 ####################################################
+
 
 
 def setup_display_modes(cfg):
@@ -476,16 +506,17 @@ def setup_display_modes(cfg):
         'Name':MODE_NAME_LINE,
         'GUID':uuid.uuid4(),
         'PipelineId':"e1eb7363-87f2-4a2b-a861-256e77835369",
-        'CurveColor':'0,0,0', # CurveColor color
-        'CurveThickness':2, # Curve thickness 
+        #'GroundPlaneUsage':1,
+        'CurveColor':LINE_CURV_COLOR, # CurveColor color
+        'CurveThickness':LINE_CURV_THICK, # Curve thickness 
         
-        'TechnicalMask':14, # 14 shows mesh "edges" (described as "creases"); 6 hides mesh "edges"
+        'TechnicalMask':46, # 14 shows mesh "edges" (described as "creases"); 6 hides mesh "edges"; 46 shows intersections?
         'TechnicalUsageMask': 6,
         
-        'TEThickness':1, # Edge thickness
-        'TSiThickness':3, # Silhouette thickness
-        'TEColor':'64,64,64', # technical edge color
-        'TSiColor':'0,0,0', # technical silhouette color
+        'TEThickness':LINE_EDGE_THICK, # Edge thickness
+        'TSiThickness':LINE_SILH_THICK, # Silhouette thickness
+        'TEColor':LINE_EDGE_COLOR, # technical edge color
+        'TSiColor':LINE_SILH_COLOR, # technical silhouette color
     }
     
     pth_ini_line = cfg['pth_save'] + r"\line.ini"
@@ -507,11 +538,11 @@ def setup_display_modes(cfg):
         'PipelineId':"952b2830-ce8a-4b4f-935a-8cd570d162c7",
         'FrontMaterialOverrideObjectColor':'y',
         
-        'CurveColor':'224,224,224', # CurveColor color
-        'CurveThickness':3, # Curve thickness 
+        'CurveColor':FILL_COLR, # CurveColor color
+        'CurveThickness':FILL_CURV_THICK, # Curve thickness 
         
         'ShadeSurface': 'y', # y or n
-        'FrontMaterialDiffuse':'224,224,224',
+        'FrontMaterialDiffuse':FILL_COLR,
         
         'SurfacesShowEdges':'n',
         'SurfacesShowTangentEdges':'n',
@@ -565,11 +596,15 @@ def activate_display_mode(disp_mode, cfg):
 
 
 disp_param_default = {
+    'GroundPlaneUsage':0,
+    'CustomGroundPlaneShow':'y',
+    'CustomGroundPlaneAltitude':0,
+    'CustomGroundPlaneAutomaticAltitude':'n',
     'FillMode': 2, # background fill: 2 (solid color?) or 7 (transparent)
     'SolidColor': "255,255,255", # background fill color if solid
     'FrontMaterialOverrideObjectColor':'n',
     
-    'TechnicalMask':47, # 47 is off?
+    'TechnicalMask':47, # 47 is off? 
     'TechnicalUsageMask': 0, # don't know
     'TEThickness':1, # technical edge thickness
     'TSiThickness':1, # technical Silhouette thickness
@@ -626,10 +661,10 @@ WorldAxesColor=0
 WxColor=150,75,75
 WyColor=75,150,75
 WzColor=0,0,150
-GroundPlaneUsage=0
-CustomGroundPlaneShow=n
-CustomGroundPlaneAltitude=0
-CustomGroundPlaneAutomaticAltitude=y
+GroundPlaneUsage={GroundPlaneUsage}
+CustomGroundPlaneShow={CustomGroundPlaneShow}
+CustomGroundPlaneAltitude={CustomGroundPlaneAltitude}
+CustomGroundPlaneAutomaticAltitude={CustomGroundPlaneAutomaticAltitude}
 CustomGroundPlaneShadowOnly=y
 LinearWorkflowUsage=0
 CustomLinearWorkflowPreProcessColors=y
