@@ -35,14 +35,6 @@ def main():
     print("plottting {} views across {} xforms of {} objects.".format( cfg['view_count'], len(fake_xf), len(cfg['groups_info']) ) )
     print("{} images will result.".format( cfg['view_count'] * len(fake_xf) * len(cfg['groups_info']) ) )
     
-    """
-    group_info = cfg['groups_info'][0]
-    xf = ext_xforms(group_info['bbox'], cfg, DEBUG)[1]
-    apply_xf(xf,group_info['obj_ids'])
-    teardown(cfg)
-    exit()
-    """
-    
     cfg['tmp_obj_ids'] = False
     cfg['rot_group'] = False
     cfg['tot_rot'] = False
@@ -52,7 +44,7 @@ def main():
         
         for g,group_info in enumerate(cfg['groups_info']):
             print("##### group {} of {}".format(g+1,len(cfg['groups_info'])))
-            
+            #print("{} objects in this group".format(len(group_info['obj_ids'])))
             set_camera(group_info['bbox'], cfg)
             isolate_group(g,cfg)
             
@@ -71,7 +63,7 @@ def main():
                     rs.RemoveObjectsFromGroup(cfg['tmp_obj_ids'],group_info['name'])
                     rs.HideGroup(group_info['name'])
                     
-                    xbbox = bbox_of_objects(cfg['tmp_obj_ids'])
+                    xbbox = bbox_of_objects(cfg['tmp_obj_ids'],cfg['obj_bbox_pad'] )
                     set_camera(xbbox, cfg)
                     
                     name = "{}_r{:03}_x{:02}_{}".format(group_info['name'].lower(),r,x,cfg['layer_info']['parent'].Name.lower())
@@ -109,11 +101,12 @@ def setup():
     props = [
         ("view_count",DEFAULT_VIEW_COUNT),
         ("image_size",512),
-        ("zoom_padding_percent",30),
+        ("zoom_padding_percent",10),
         ("iso (NE, NW, SE, or SW)","SE"),
         ("do_scale_1d", "y"),
         ("do_scale_2d", "n"),
-        ("do_shear", "n")
+        ("do_shear", "n"),
+        ("render_or_capture", "render")
     ]
     results = False
     if DEBUG: results = [p[1] for p in props]
@@ -130,6 +123,7 @@ def setup():
         cfg["do_scale_1d"]           = str(results[4]).lower() in ("y", "yes", "true", "t", "1")
         cfg["do_scale_2d"]           = str(results[5]).lower() in ("y", "yes", "true", "t", "1")
         cfg["do_shear"]              = str(results[6]).lower() in ("y", "yes", "true", "t", "1")
+        cfg["do_render_via_view_cap"]= str(results[7]).lower().startswith("c")
         
     except Exception as e:
         big_problem("There was a problem parsing the values given in the properties dialog.")
@@ -341,18 +335,29 @@ def do_view_capture(fname, is_first, cfg):
     bmp.MakeTransparent() # this is rotten. https://discourse.mcneel.com/t/capturetobitmap-with-transparency/4905/2
     bmp.Save( os.path.join(cfg['pth_save_line'], "{}.png".format(fname) ) )
     
-    activate_display_mode(cfg['display_modes']['rndr'], cfg)
-    bmp = view_cap().CaptureToBitmap(cfg['view'])
-    bmp.Save( os.path.join(cfg['pth_save_rndr'], "{}.png".format(fname) ) ) 
-    if is_first:
-        bmp.Save( os.path.join(cfg['pth_save'], "{}.png".format(fname) ) )
-        
     if cfg['do_capture_fill']:
         isolate_layer_fill(cfg)
         activate_display_mode(cfg['display_modes']['fill'], cfg)
         #bmp = cfg['view'].CaptureToBitmap(System.Drawing.Size(cfg['size'],cfg['size']))
         bmp = view_cap().CaptureToBitmap(cfg['view'])
         bmp.Save( os.path.join(cfg['pth_save_fill'], "{}.png".format(fname) ) )    
+        
+        
+    isolate_layer_rndr(cfg)
+    if cfg["do_render_via_view_cap"]:
+        activate_display_mode(cfg['display_modes']['rndr'], cfg)
+        bmp = view_cap().CaptureToBitmap(cfg['view'])
+        bmp.Save( os.path.join(cfg['pth_save_rndr'], "{}.png".format(fname) ) ) 
+        #if is_first: bmp.Save( os.path.join(cfg['pth_save'], "{}.png".format(fname) ) )
+    else:    
+        do_render(fname, cfg)
+
+def do_render(fname, cfg):
+    rs.CurrentView(cfg['view'].ActiveViewportID)
+    rs.Command("_-Render")
+    rs.Command('_-SaveRenderWindowAs "{}"'.format( os.path.join(cfg['pth_save_rndr'],"{}.png".format(fname) ) ) )
+    rs.Command("_-CloseRenderWindow")
+
 
 ####################################################
 
