@@ -5,13 +5,61 @@
 function PSprepareDocument(layerSetName){
   app.preferences.rulerUnits = Units.PIXELS;
   const doc = app.activeDocument;
+
+  var selectedLayers = getSelectedLayers(doc);
+  var selectedIds = []
+  /*
+  for( i = 0; i < selectedLayers.length; i++) {
+      if (selectedLayers[i].typename === "LayerSet") return -1;
+      if (selectedLayers[i].isBackgroundLayer) return -1;
+      if (selectedLayers[i].kind !== LayerKind.NORMAL) return -1;
+      if (selectedLayers[i].bounds == 0) return -1;
+      selectedIds.push(selectedLayers[i].id);
+   }
+   return selectedIds;
+  */
   var activeLayer = doc.activeLayer;
   if (activeLayer.typename === "LayerSet") return -1;
   if (activeLayer.isBackgroundLayer) return -1;
   if (activeLayer.kind !== LayerKind.NORMAL) return -1;
   if (activeLayer.bounds == 0) return -1;
   return activeLayer.id;
+
 }
+
+cTID = function(s) { return app.charIDToTypeID(s); };
+sTID = function(s) { return app.stringIDToTypeID(s); };
+
+function newGroupFromLayers(doc) {
+    var desc = new ActionDescriptor();
+    var ref = new ActionReference();
+    ref.putClass( sTID('layerSection') );
+    desc.putReference( cTID('null'), ref );
+    var lref = new ActionReference();
+    lref.putEnumerated( cTID('Lyr '), cTID('Ordn'), cTID('Trgt') );
+    desc.putReference( cTID('From'), lref);
+    executeAction( cTID('Mk  '), desc, DialogModes.NO );
+};
+
+function getSelectedLayers(doc) {
+
+  var selLayers = [];
+  newGroupFromLayers(doc);
+
+  var group = doc.activeLayer;
+  var layers = group.layers;
+
+  for (var i = 0; i < layers.length; i++) {
+    selLayers.push(layers[i]);
+  }
+
+  executeAction(cTID("undo", undefined, DialogModes.NO));
+
+  return selLayers;
+};
+
+
+
 
 
 

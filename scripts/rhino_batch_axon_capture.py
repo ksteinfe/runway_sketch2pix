@@ -1,4 +1,4 @@
-import os, sys, math, copy, StringIO, datetime, time, shutil, uuid
+import os, sys, math, copy, StringIO, datetime, time, shutil, uuid, json
 from System.IO import Directory
 import Rhino, System
 import scriptcontext as sc
@@ -43,7 +43,7 @@ def main():
         #raise Exception("nope")
         
         for g,group_info in enumerate(cfg['groups_info']):
-            print("##### group {} of {}".format(g+1,len(cfg['groups_info'])))
+            print("##### {} ({} of {})".format(group_info['name'].lower(), g+1,len(cfg['groups_info'])))
             #print("{} objects in this group".format(len(group_info['obj_ids'])))
             set_camera(group_info['bbox'], cfg)
             isolate_group(g,cfg)
@@ -101,29 +101,29 @@ def setup():
     props = [
         ("view_count",DEFAULT_VIEW_COUNT),
         ("image_size",512),
-        ("zoom_padding_percent",10),
+        ("zoom_padding_percent",0),
         ("iso (NE, NW, SE, or SW)","SE"),
         ("do_scale_1d", "y"),
-        ("do_scale_2d", "n"),
+        ("do_scale_2d", "y"),
         ("do_shear", "n"),
         ("render_or_capture", "render")
     ]
-    results = False
-    if DEBUG: results = [p[1] for p in props]
-    if not results:
+    prop_box_results = False
+    if DEBUG: prop_box_results = [p[1] for p in props]
+    if not prop_box_results:
         itms, vals = [p[0] for p in props], [p[1] for p in props]
-        results = rs.PropertyListBox(itms, vals, "Please set the following properties.", "Rhino Batch Render")
-        if results is None: exit()
+        prop_box_results = rs.PropertyListBox(itms, vals, "Please set the following properties.", "Rhino Batch Render")
+        if prop_box_results is None: exit()
     
     try:
-        cfg['view_count']            = int(results[0])
-        cfg['size']                  = int(results[1])
-        cfg['obj_bbox_pad']          = int(results[2])*0.01
-        cfg['iso_select']            = str(results[3]).lower()
-        cfg["do_scale_1d"]           = str(results[4]).lower() in ("y", "yes", "true", "t", "1")
-        cfg["do_scale_2d"]           = str(results[5]).lower() in ("y", "yes", "true", "t", "1")
-        cfg["do_shear"]              = str(results[6]).lower() in ("y", "yes", "true", "t", "1")
-        cfg["do_render_via_view_cap"]= str(results[7]).lower().startswith("c")
+        cfg['view_count']            = int(prop_box_results[0])
+        cfg['size']                  = int(prop_box_results[1])
+        cfg['obj_bbox_pad']          = int(prop_box_results[2])*0.01
+        cfg['iso_select']            = str(prop_box_results[3]).lower()
+        cfg["do_scale_1d"]           = str(prop_box_results[4]).lower() in ("y", "yes", "true", "t", "1")
+        cfg["do_scale_2d"]           = str(prop_box_results[5]).lower() in ("y", "yes", "true", "t", "1")
+        cfg["do_shear"]              = str(prop_box_results[6]).lower() in ("y", "yes", "true", "t", "1")
+        cfg["do_render_via_view_cap"]= str(prop_box_results[7]).lower().startswith("c")
         
     except Exception as e:
         big_problem("There was a problem parsing the values given in the properties dialog.")
@@ -143,13 +143,17 @@ def setup():
     #
     pth_root = False
     if DEBUG: pth_root = DEFAULT_SAVE_PATH
-    if not pth_root: pth_root = rs.BrowseForFolder(message="message", title="title")
+    if not pth_root: pth_root = rs.BrowseForFolder(message="where should we save this?", title="Where to Save?")
     dir_cfg = initialize_directory(pth_root, cfg['do_capture_fill'])
     cfg.update(dir_cfg)
     
+    
+    with open(os.path.join(cfg['pth_save'],'settings.json'), 'w') as json_file:
+        json.dump({k:"{}".format(str(v)) for k,v in cfg.items() if k is not "groups_info"}, json_file, sort_keys=True, indent=4)
+    
     ## view
     #
-    poss = {"ne":(1,1,1),"nw":(-1,1,1),"se":(1,-1,1),"sw":(-1,-1,1)}
+    poss = {"ne":(1,1,0.75),"nw":(-1,1,0.75),"se":(1,-1,0.75),"sw":(-1,-1,0.75)}
     if cfg["iso_select"] not in poss:
         big_problem("There was a problem with the selected isometric view.\n'{}' is not a valid selection.".format(cfg["iso_select"]))        
     cfg["iso_cam_pos"] = poss[cfg["iso_select"]]
@@ -162,6 +166,7 @@ def setup():
     setup_floating_viewport(cfg)
     setup_render_settings(cfg)
     
+
     
     return cfg
     

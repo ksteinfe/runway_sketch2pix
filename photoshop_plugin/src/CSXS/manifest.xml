@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <ExtensionManifest ExtensionBundleId="com.ksteinfe.runway-ced-pshop" ExtensionBundleVersion="1.0.0" Version="8.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.ksteinfe.runway-ced-pshop.panel" Version="1.0.0" />
+    <Extension Id="com.ksteinfe.runway-ced-pshop.panel" Version="1.0.1" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -31,7 +31,7 @@
         </Lifecycle>
         <UI>
           <Type>Panel</Type>
-          <Menu>Sketch2Pix 0.0</Menu>
+          <Menu>Sketch2Pix 1.0</Menu>
           <Geometry>
             <Size>
               <Height>50</Height>

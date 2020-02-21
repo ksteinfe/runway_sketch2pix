@@ -64,6 +64,14 @@ function onClick() {
 async function prepareDocument() {
   const layerSrcId = await evalScriptPromise("PSprepareDocument()");
   return layerSrcId;
+  /*
+  if (layerSrcId.includes(',')){
+    console.log(`more than one layer found: ${layerSrcId}`);
+    return layerSrcId.split(',');
+  } else {
+    return layerSrcId;
+  }
+  */
 };
 
 async function preInference(layerSrcId, savePath, mimeType, imgSize){
