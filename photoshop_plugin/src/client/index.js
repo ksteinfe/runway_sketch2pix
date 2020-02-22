@@ -19,42 +19,49 @@ openButton.addEventListener("click", onClick);
 
 /* Write a helper function to pass instructions to the ExtendScript side. */
 function onClick() {
-  console.log("click!");
-  document.body.style.background = '#aaa';
+  userMessage("Inference started.", "Preparing document.");
   prepareDocument(LAYERSETNAME)
-    .then( async layerSrcId => {
-      if (layerSrcId<0){
-        console.log("!!! Active layer is not valid. Select a regular photoshop 'art' layer, not a layer group, an empty layer, the background layer, or non-raster layer.");
-        document.body.style.background = '#f00';
+    .then( async prepareDocumentResult => {
+      if (!prepareDocumentResult['success']){
+        userMessage("!!! error in preparing document", prepareDocumentResult['message'], "#f00");
         return false;
       }
-      console.log(`... identified valid source layer with id ${layerSrcId}.`);
+      var layerSrcIds = prepareDocumentResult['layerSrcIds'];
+      userMessage("Step 1 of 4 complete.", `... identified ${layerSrcIds.length} valid source layers.`);
 
-      const rando = crypto.randomBytes(4).toString("hex");
-      const ext = (MIMETYPE === 'image/png' ? '.png' : '.jpg');
-      const tmpPathSrc = path.join(tmpPath,'rw_'+rando+'_src'+ext).replace(/\\/g, "\\\\");
-      const tmpPathDst = path.join(tmpPath,'rw_'+rando+'_dst'+ext).replace(/\\/g, "\\\\");
-      //console.log(`saving to ${tmpPathSrc}`);
+      if (layerSrcIds.length > 1){
+        userMessage("!!! I can only handle one layer at a time for now.", "#f00");
+        return false;
+      }
 
-      var data = {};
-      preInference(layerSrcId, tmpPathSrc, MIMETYPE, IMGSIZE)
-        .then( async rslt => {
-          [data.img64Src, data.bounds] = rslt;
-          //data.bounds = Array(0,0,256,256);
-          console.log("... pre-inference complete.");
-          document.body.style.background = '#888';
-          //console.log("img64Src: "+img64Src);
-          doInference(data.img64Src)
-            .then( async img64Dst => {
-              console.log("... received inference image from Runway");
-              document.body.style.background = '#666';
-              postInference(layerSrcId, img64Dst, tmpPathDst, data.bounds)
-                .then( async rslt => {
-                  console.log("... post-inference complete.");
-                  document.body.style.background = '#444';
-                });
-            });
-        });
+      for (i=0; i<layerSrcIds.length; i++) {
+        const layerSrcId = layerSrcIds[i];
+        const rando = crypto.randomBytes(4).toString("hex");
+        const ext = (MIMETYPE === 'image/png' ? '.png' : '.jpg');
+        const tmpPathSrc = path.join(tmpPath,'rw_'+rando+'_src'+ext).replace(/\\/g, "\\\\");
+        const tmpPathDst = path.join(tmpPath,'rw_'+rando+'_dst'+ext).replace(/\\/g, "\\\\");
+        //console.log(`saving to ${tmpPathSrc}`);
+
+        var data = {};
+        preInference(layerSrcId, tmpPathSrc, MIMETYPE, IMGSIZE)
+          .then( async rslt => {
+            [data.img64Src, data.bounds] = rslt;
+            //data.bounds = Array(0,0,256,256);
+            userMessage("Step 2 of 4 complete.", `... completed pre-inference, sent image to Runway`, '#666');
+
+            //console.log("img64Src: "+img64Src);
+            doInference(data.img64Src)
+              .then( async img64Dst => {
+                userMessage("Step 3 of 4 complete.", `... received inference image from Runway`, '#666');
+                postInference(layerSrcId, img64Dst, tmpPathDst, data.bounds)
+                  .then( async rslt => {
+                    console.log("... post-inference complete.");
+                    userMessage("Step 4 of 4 complete.", `... post-inference completed.`);
+                  });
+              });
+          });
+
+      } // end for each layerSrcId
 
 
     });
@@ -62,16 +69,10 @@ function onClick() {
 
 
 async function prepareDocument() {
-  const layerSrcId = await evalScriptPromise("PSprepareDocument()");
-  return layerSrcId;
-  /*
-  if (layerSrcId.includes(',')){
-    console.log(`more than one layer found: ${layerSrcId}`);
-    return layerSrcId.split(',');
-  } else {
-    return layerSrcId;
-  }
-  */
+  var prepareDocumentResult = await evalScriptPromise("PSprepareDocument()"); // returns a json
+  console.log(`prepareDocumentResult: ${prepareDocumentResult}`);
+  prepareDocumentResult = JSON.parse(prepareDocumentResult);
+  return(prepareDocumentResult);
 };
 
 async function preInference(layerSrcId, savePath, mimeType, imgSize){
@@ -188,10 +189,18 @@ function evalScriptPromise(func, verbose=false) {
   return new Promise((resolve, reject) => {
     csInterface.evalScript(func, (response) => {
       if (response === 'EvalScript error.'){
-        console.log(response);
+        console.log(`Error in calling "${func}". Response was "${response}"`);
         reject();
       }
       resolve(response);
     });
   });
+};
+
+
+function userMessage(str0, str1="", bkcolor="#333") {
+  console.log(str0 +"\t|\t"+ str1);
+  document.querySelector("#message-00").textContent = str0;
+  document.querySelector("#message-01").textContent = str1;
+  document.body.style.background = bkcolor;
 };

@@ -7,6 +7,12 @@
 <body>
     <button id="the-button" class="button">abracadabra!</button>
     <button class="debug button" onclick="window.cep.util.openURLInDefaultBrowser('http://localhost:8088/')">debug</button>
+    <br>
+    <span class="message">
+      <span id="message-00">...</span>
+      <br>
+      <span id="message-01"></span>
+    </span>
     <script type="text/javascript" src="CSInterface.js"></script>
     <script type="text/javascript" src="index.js"></script>
 
@@ -33,6 +39,13 @@
       color: #666;
       padding: 5px;
       font-size: 10px;
+    }
+    .message{
+      display: block;
+      margin-top: 3px;
+      color: #aaa;
+      font-size: 10px;
+      line-height: 1.5em;
     }
 
     body {

@@ -6,24 +6,30 @@ function PSprepareDocument(layerSetName){
   app.preferences.rulerUnits = Units.PIXELS;
   const doc = app.activeDocument;
 
-  var selectedLayers = getSelectedLayers(doc);
-  var selectedIds = []
-  /*
+  try {
+    var selectedLayers = getSelectedLayers(doc);
+  } catch(err) {
+    return '{"success":false, "message":"Cannot work with the selected layers, try unselecting the Background layer. '+err.message.replace(/"/g, '\\"').replace('\n',' ')+'"}';
+  }
+
+  var selectedIds = [];
   for( i = 0; i < selectedLayers.length; i++) {
-      if (selectedLayers[i].typename === "LayerSet") return -1;
-      if (selectedLayers[i].isBackgroundLayer) return -1;
-      if (selectedLayers[i].kind !== LayerKind.NORMAL) return -1;
-      if (selectedLayers[i].bounds == 0) return -1;
+      if (selectedLayers[i].typename === "LayerSet") return '{"success":false, "message":"One the selected layers is a LayerSet."}';
+      if (selectedLayers[i].isBackgroundLayer) return '{"success":false, "message":"One of the selected layers is the Background."}';
+      if (selectedLayers[i].kind !== LayerKind.NORMAL) return '{"success":false, "message":"One of the selected layers is not normal."}';
+      if (selectedLayers[i].bounds == 0) return '{"success":false, "message":"One of the selected layers is empty."}';
       selectedIds.push(selectedLayers[i].id);
    }
-   return selectedIds;
-  */
+   return '{"success":true, "layerSrcIds":['+selectedIds.join(",")+']}';
+
+  /*
   var activeLayer = doc.activeLayer;
   if (activeLayer.typename === "LayerSet") return -1;
   if (activeLayer.isBackgroundLayer) return -1;
   if (activeLayer.kind !== LayerKind.NORMAL) return -1;
   if (activeLayer.bounds == 0) return -1;
   return activeLayer.id;
+  */
 
 }
 
