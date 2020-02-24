@@ -78,6 +78,8 @@ function JSXPreInference(id, mimeType, tarSize, savePath){
 
   //savePath = savePath.replace(/\\/g, "\\\\");
   //app.activeDocument.suspendHistory("Runway Pre-Inference", 'preInference('+id+', "'+mimeType+'", '+modInfo.size+', '+tarSize+', "'+savePath+'")');
+  //app.activeDocument.activeLayer = layer;
+  selectLayerById(id);
   var base64Str = selectedLayersToBase64String(id);
 
   // everything going back to JS land is a string, so here we use JSON
@@ -173,7 +175,7 @@ function bndsHeight(bnds){ return bnds[3] - bnds[1]; }
 function selectedLayersToBase64String(layerID) {
   var pngPath, pngFile, pngData64, pngBase64Image;
 
-  layerID = app.activeDocument.activeLayer.id;
+  //layerID = app.activeDocument.activeLayer.id;
 
   pngPath = new File(Folder.temp + "/" + layerID).fsName;
   writeLayerPNGfile(pngPath);
@@ -184,7 +186,7 @@ function selectedLayersToBase64String(layerID) {
 
   pngData64 = pngFile.read();
   pngFile.close();
-  //pngFile.remove();
+  pngFile.remove();
 
   //return pngData64;
   return "data:image/png;base64," + pngData64;
@@ -264,6 +266,17 @@ function getArtLayerById(id) {
     }
     alert("Error in getArtLayerById()\nNo layer found with id " + id);
 }
+
+function selectLayerById(id){
+  var ref = new ActionReference();
+  ref.putIdentifier(charIDToTypeID("Lyr "), id);
+  var desc = new ActionDescriptor();
+  desc.putReference(charIDToTypeID("null"), ref );
+  //if(add) desc.putEnumerated( stringIDToTypeID( "selectionModifier" ), stringIDToTypeID( "selectionModifierType" ), stringIDToTypeID( "addToSelection" ) );
+  desc.putBoolean( charIDToTypeID( "MkVs" ), false );
+  executeAction(charIDToTypeID("slct"), desc, DialogModes.NO );
+};
+
 
 
 

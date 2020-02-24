@@ -19,6 +19,7 @@ openButton.addEventListener("click", onClick);
 
 /* Write a helper function to pass instructions to the ExtendScript side. */
 function onClick() {
+  console.log("-----------------------------------------------");
   userMessage("Inference started.", "Preparing document.");
   prepareDocument(LAYERSETNAME)
     .then( async prepareDocumentResult => {
@@ -27,45 +28,53 @@ function onClick() {
         return false;
       }
       var layerSrcIds = prepareDocumentResult['layerSrcIds'];
-      userMessage("Step 1 of 4 complete.", `... identified ${layerSrcIds.length} valid source layers.`);
+      userMessage("Document preparation complete.", `... identified ${layerSrcIds.length} valid source layers.`);
 
-      if (layerSrcIds.length > 1){
-        userMessage("!!! I can only handle one layer at a time for now.", "#f00");
-        return false;
-      }
-
-      for (i=0; i<layerSrcIds.length; i++) {
-        const layerSrcId = layerSrcIds[i];
-        const rando = crypto.randomBytes(4).toString("hex");
-        const ext = (MIMETYPE === 'image/png' ? '.png' : '.jpg');
-        const tmpPathSrc = path.join(tmpPath,'rw_'+rando+'_src'+ext).replace(/\\/g, "\\\\");
-        const tmpPathDst = path.join(tmpPath,'rw_'+rando+'_dst'+ext).replace(/\\/g, "\\\\");
-        //console.log(`saving to ${tmpPathSrc}`);
-
-        var data = {};
-        preInference(layerSrcId, tmpPathSrc, MIMETYPE, IMGSIZE)
-          .then( async rslt => {
-            [data.img64Src, data.bounds] = rslt;
-            //data.bounds = Array(0,0,256,256);
-            userMessage("Step 2 of 4 complete.", `... completed pre-inference, sent image to Runway`, '#666');
-
-            //console.log("img64Src: "+img64Src);
-            doInference(data.img64Src)
-              .then( async img64Dst => {
-                userMessage("Step 3 of 4 complete.", `... received inference image from Runway`, '#666');
-                postInference(layerSrcId, img64Dst, tmpPathDst, data.bounds)
-                  .then( async rslt => {
-                    console.log("... post-inference complete.");
-                    userMessage("Step 4 of 4 complete.", `... post-inference completed.`);
-                  });
-              });
-          });
-
-      } // end for each layerSrcId
+      layerSrcIds.reduce( (prevPromise, id, n) => {
+        return prevPromise.then(() => {
+          return processLayerId(id,n,layerSrcIds.length);
+        });
+      }, Promise.resolve());
 
 
     });
 };
+
+
+
+function processLayerId(layerSrcId, idx, tot){
+  console.log("------------------------");
+  return new Promise(resolve => {
+
+    const rando = crypto.randomBytes(4).toString("hex");
+    const ext = (MIMETYPE === 'image/png' ? '.png' : '.jpg');
+    const tmpPathSrc = path.join(tmpPath,'rw_'+rando+'_src'+ext).replace(/\\/g, "\\\\");
+    const tmpPathDst = path.join(tmpPath,'rw_'+rando+'_dst'+ext).replace(/\\/g, "\\\\");
+    //console.log(`saving to ${tmpPathSrc}`);
+
+    var data = {};
+    preInference(layerSrcId, tmpPathSrc, MIMETYPE, IMGSIZE)
+      .then( async rslt => {
+        [data.img64Src, data.bounds] = rslt;
+        //data.bounds = Array(0,0,256,256);
+        userMessage(`Step 1 of 3 complete for layer ${idx+1} of ${tot}.`, `... completed pre-inference, sent image to Runway`, '#666');
+
+        //console.log("img64Src: "+img64Src);
+        doInference(data.img64Src)
+          .then( async img64Dst => {
+            userMessage(`Step 2 of 3 complete for layer ${idx+1} of ${tot}.`, `... received inference image from Runway`, '#666');
+            postInference(layerSrcId, img64Dst, tmpPathDst, data.bounds)
+              .then( async rslt => {
+                console.log("... post-inference complete.");
+                userMessage(`Step 3 of 3 complete for layer ${idx+1} of ${tot}.`, `... post-inference completed.`);
+                resolve();
+              });
+          });
+      });
+
+  });
+
+}
 
 
 async function prepareDocument() {
@@ -81,7 +90,7 @@ async function preInference(layerSrcId, savePath, mimeType, imgSize){
     .then( saveLayerResult => {
       saveLayerResult = JSON.parse(saveLayerResult);
       //console.log(saveLayerResult.img64);
-      console.log(`layer bounded to rectangle ${saveLayerResult.bounds} \t was converted to base64`);
+      console.log(`layer ${layerSrcId} bounded to rectangle ${saveLayerResult.bounds} \t was converted to base64`);
       const bndsSve = saveLayerResult.bounds;
 
       var img = new Image;
@@ -165,7 +174,9 @@ async function postInference(layerSrcId, img64, filename, bounds){
   const layerName = "out";
   bounds = JSON.stringify(bounds);
   console.log(`placing to bounds ${bounds}`);
-  return evalScriptPromise(`JSXPostInference(${layerSrcId}, ${bounds}, "${LAYERSETNAME}", "${filename}")`, true);
+  const rslt = await evalScriptPromise(`JSXPostInference(${layerSrcId}, ${bounds}, "${LAYERSETNAME}", "${filename}")`, true)
+    .then( dlet => { window.cep.fs.deleteFile(filename) } );
+    // deletes temporary file
 };
 
 
