@@ -13,11 +13,11 @@ FILL_LAYER_NAME = "fill"
 
 DO_CAPTURE_VIEW = True
 
-LINE_CURV_COLOR = '0,0,0'   # color of Rhino curve objects on the 'line' layer
-LINE_CURV_THICK = 5         # thickness of Rhino curve objects on the 'line' layer
+LINE_CURV_COLOR = '32,32,32'   # color of Rhino curve objects on the 'line' layer
+LINE_CURV_THICK = 1         # thickness of Rhino curve objects on the 'line' layer
 LINE_SILH_COLOR = '0,0,0'   # color of mesh and surface silhouettes on the 'line' layer
 LINE_SILH_THICK = 3         # thickness of mesh and surface silhouettes on the 'line' layer
-LINE_EDGE_COLOR = '32,32,32'# color of mesh and surface fold lines on the 'line' layer
+LINE_EDGE_COLOR = '128,128,128'# color of mesh and surface fold lines on the 'line' layer
 LINE_EDGE_THICK = 2         # thickness of mesh and surface fold lines on the 'line' layer
 FILL_CURV_THICK = 10        # thickness of Rhino curve objects on the 'fill' layer
 FILL_COLR = '224,224,224'   # color of all fills on the 'fill' layer
@@ -106,7 +106,8 @@ def setup():
         ("do_scale_1d", "y"),
         ("do_scale_2d", "y"),
         ("do_shear", "n"),
-        ("render_or_capture", "render")
+        ("render_or_capture", "render"),
+        ("worms_eye?", "n")
     ]
     prop_box_results = False
     if DEBUG: prop_box_results = [p[1] for p in props]
@@ -124,6 +125,7 @@ def setup():
         cfg["do_scale_2d"]           = str(prop_box_results[5]).lower() in ("y", "yes", "true", "t", "1")
         cfg["do_shear"]              = str(prop_box_results[6]).lower() in ("y", "yes", "true", "t", "1")
         cfg["do_render_via_view_cap"]= str(prop_box_results[7]).lower().startswith("c")
+        cfg["do_worms_eye"]          = str(prop_box_results[8]).lower() in ("y", "yes", "true", "t", "1")
         
     except Exception as e:
         big_problem("There was a problem parsing the values given in the properties dialog.")
@@ -153,11 +155,13 @@ def setup():
     
     ## view
     #
-    poss = {"ne":(1,1,0.75),"nw":(-1,1,0.75),"se":(1,-1,0.75),"sw":(-1,-1,0.75)}
+    cam_height = 0.75
+    if cfg["do_worms_eye"]: cam_height *= -1
+    poss = {"ne":(1,1,cam_height),"nw":(-1,1,cam_height),"se":(1,-1,cam_height),"se":(-1,-1,cam_height)}
+        
     if cfg["iso_select"] not in poss:
         big_problem("There was a problem with the selected isometric view.\n'{}' is not a valid selection.".format(cfg["iso_select"]))        
     cfg["iso_cam_pos"] = poss[cfg["iso_select"]]
-    
     
     ## SETUP RHINO
     #
