@@ -301,7 +301,7 @@ class Pix2PixDataset(data.Dataset):
         sze = len(all_dataset)
         print("{} images found in the complete dataset".format(sze))
 
-        val_size = int(0.02 * sze)
+        val_size = max(30, int(0.02 * sze))
         test_size = int(0.18 * sze)
         train_size = sze - val_size - test_size
 
