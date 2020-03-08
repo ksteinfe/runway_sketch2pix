@@ -14,7 +14,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-version_number = 1.0
+version_number = 0.0
 print('pix2pix r{} has loaded.'.format(version_number))
 
 class ImgUtil():
@@ -97,15 +97,22 @@ class ImgUtil():
 
 class Pix2PixDataset(data.Dataset):
     FILL_COLOR = (224, 224, 224, 255)
-    JIG_AMT_DEFAULT = 4
-    ROT_AMT_DEFAULT = 2
-    SCL_AMT_DEFAULT = 0.1
+    JIG_AMT_DEFAULT = 8 # jiggle amount (at raw scale of images)
+    ROT_AMT_DEFAULT = 2 # rotation amount (at raw scale of images)
+    SCL_AMT_DEFAULT = 0.1 # scale amount (at raw scale of images)
+    JIT_AMT = 60 # jitter amount (at raw scale of images)
+
+    RAW_SZE = 512 # should be twice Pix2Pix256RGBA.IMG_SIZE
+    TRN_SZE = 256 # should be same as Pix2Pix256RGBA.IMG_SIZE
 
     def __init__(self, extraction_rslt, direction="a2b"):
         super(Pix2PixDataset, self).__init__()
         self.direction = direction
         self.is_compound = extraction_rslt['is_compound']
         self.pths = extraction_rslt['pths']
+
+        if extraction_rslt['img_size'] != Pix2PixDataset.RAW_SZE: raise Exception("!!!! Training set is not compatable with this version.\nRaw training image size of {} was expected, but {} was found.".format(Pix2PixDataset.RAW_SZE,extraction_rslt['img_size']))
+        if Pix2PixDataset.RAW_SZE != 2*Pix2PixDataset.TRN_SZE: raise Exception("!!!! Raw training image size of {} is not twice as big as {}".format(Pix2PixDataset.RAW_SZE,Pix2PixDataset.TRN_SZE))
 
     @staticmethod
     def tform():
@@ -115,110 +122,128 @@ class Pix2PixDataset(data.Dataset):
         return( transforms.Compose(transform_list) )
 
     """
-    @staticmethod
-    def line_to_fill(line, rndr):
-        return Pix2PixDataset._fill_and_jiggle(line,rndr, Pix2PixDataset.FILL_COLOR, jig_amt=0, rot_amt=0, scl_amt=0)
-
-    @staticmethod
-    def load_img_a(filepath):
-        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=True)
-
-    @staticmethod
-    def load_img_b(filepath):
-        return ImgUtil.load_img(filepath, do_resize=True, do_flatten=False)
+    Combines given a0 and a1 (line and fill) images to a single a image.
+    Overlays line on top of fill, with a bit of random jiggle, rotation, and (no) scaling
+    Only used in cases where fills are given.
     """
-
     @staticmethod
-    def _filled_a_from_composite(a0,a1, jig_amt=None, rot_amt=None, scl_amt=None):
+    def _filled_a_from_composite(img_a0,img_a1, jig_amt=None, rot_amt=None, scl_amt=None):
         if jig_amt is None: jig_amt = Pix2PixDataset.JIG_AMT_DEFAULT
         if rot_amt is None: rot_amt = Pix2PixDataset.ROT_AMT_DEFAULT
-        if scl_amt is None: scl_amt = Pix2PixDataset.SCL_AMT_DEFAULT
+        # if scl_amt is None: scl_amt = Pix2PixDataset.SCL_AMT_DEFAULT # scaling not used for now
         jig_amt = int(jig_amt/2)
 
-        a0 = ImgUtil.img_alpha_to_color(a0).convert('RGBA')
-        a1 = ImgUtil.img_alpha_to_color(a1).convert('RGBA')
+        img_a0 = ImgUtil.img_alpha_to_color(img_a0).convert('RGBA')
+        img_a1 = ImgUtil.img_alpha_to_color(img_a1).convert('RGBA')
 
         # rotate
-        a0 = a0.rotate( random.randint(-rot_amt,rot_amt) , Image.BICUBIC, fillcolor='white' )
-        a1 = a1.rotate( random.randint(-rot_amt,rot_amt) , Image.BICUBIC, fillcolor='white' )
+        # do not rotate line image?
+        #img_a0 = img_a0.rotate( random.randint(-rot_amt,rot_amt) , Image.BICUBIC, fillcolor='white' )
+        img_a1 = img_a1.rotate( random.randint(-rot_amt,rot_amt) , Image.BICUBIC, fillcolor='white' )
 
         # jiggle
-        a0n = Image.new('RGBA', a0.size, (255, 255, 255, 255))
-        a0n.paste(a0, (random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)))
-        a1n = Image.new('RGBA', a1.size, (255, 255, 255, 255))
-        a1n.paste(a1, (random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)))
+        img_a0n = Image.new('RGBA', img_a0.size, (255, 255, 255, 255))
+        img_a0n.paste(img_a0, (random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)))
+        img_a1n = Image.new('RGBA', img_a1.size, (255, 255, 255, 255))
+        img_a1n.paste(img_a1, (random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)))
 
-        return ImageChops.darker(a0n, a1n)
+        return ImageChops.darker(img_a0n, img_a1n)
 
+    """
+    Returns an filled line image by extracting the alpha channel of the given b image
+    Only used in cases in which fills are desired but are no fill images are present in the given dataset
+    """
     @staticmethod
-    def _filled_a_from_b_alpha(line, rndr, fill_color, jig_amt=None, rot_amt=None, scl_amt=None):
+    def _filled_a_from_b_alpha(img_a, img_b, fill_color, jig_amt=None, rot_amt=None, scl_amt=None):
         if jig_amt is None: jig_amt = Pix2PixDataset.JIG_AMT_DEFAULT
         if rot_amt is None: rot_amt = Pix2PixDataset.ROT_AMT_DEFAULT
         if scl_amt is None: scl_amt = Pix2PixDataset.SCL_AMT_DEFAULT
         jig_amt = int(jig_amt/2)
-        dim = rndr.size[0]
+        dim = img_b.size[0]
 
-        # jiggle rndr img
+        # jiggle img_b img
         dx, dy = random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)
-        fill = Image.new('RGBA', rndr.size, (255, 255, 255, 0))
+        fill = Image.new('RGBA', img_b.size, (255, 255, 255, 0))
         scl = random.uniform(1-scl_amt,1+scl_amt)
         ndim = int(dim*scl)
-        rndr = rndr.resize((ndim,ndim), Image.BICUBIC)
-        fill.paste(rndr, (int((dim-ndim)/2), int((dim-ndim)/2)) )
+        img_b = img_b.resize((ndim,ndim), Image.BICUBIC)
+        fill.paste(img_b, (int((dim-ndim)/2), int((dim-ndim)/2)) )
 
         _,_,_,alpha = fill.split()
         gr = Image.new('RGBA', fill.size, fill_color)
         wh = Image.new('RGBA', fill.size, (255, 255, 255, 255))
-        fill = Image.composite(gr,wh,alpha) # an image containing a grey region the shape of the alpha channel of rndr
+        fill = Image.composite(gr,wh,alpha) # an image containing a grey region the shape of the alpha channel of img_b
 
-        # rotate line img
+        # rotate img_a
         rot_amt = random.randint(-rot_amt,rot_amt)
-        line = line.rotate( rot_amt , Image.BICUBIC, fillcolor='white' )
+        img_a = img_a.rotate( rot_amt , Image.BICUBIC, fillcolor='white' )
 
-        # jiggle line img
+        # jiggle img_a
         dx, dy = random.randint(-jig_amt,jig_amt), random.randint(-jig_amt,jig_amt)
-        back = Image.new('RGBA', line.size, (255, 255, 255, 255))
-        back.paste(line, (dx,dy))
+        back = Image.new('RGBA', img_a.size, (255, 255, 255, 255))
+        back.paste(img_a, (dx,dy))
 
         return ImageChops.darker(back, fill)
 
-    def __getitem__(self, index):
-        b = ImgUtil.load_img(self.pths[index]['b'], do_resize=True, do_flatten=False)
+    def __getitem__(self, index): return self._do_get_item(index)
+
+    def _do_get_item(self, index, forced_resize_method=-1):
+        def resize(img, sz=Pix2PixDataset.TRN_SZE): return img.resize((sz, sz), Image.BICUBIC)
+
+        img_b = ImgUtil.load_img(self.pths[index]['b'], do_resize=False, do_flatten=False)
+
         if self.is_compound:
-            a0 = ImgUtil.load_img(self.pths[index]['a0'], do_resize=True, do_flatten=False)
-            a1 = ImgUtil.load_img(self.pths[index]['a1'], do_resize=True, do_flatten=False)
-            a = Pix2PixDataset._filled_a_from_composite(a0,a1)
+            img_a0 = ImgUtil.load_img(self.pths[index]['a0'], do_resize=False, do_flatten=False)
+            img_a1 = ImgUtil.load_img(self.pths[index]['a1'], do_resize=False, do_flatten=False)
+            img_a = Pix2PixDataset._filled_a_from_composite(img_a0,img_a1)
         else:
-            a = ImgUtil.load_img(self.pths[index]['a0'], do_resize=True, do_flatten=True)
-            a = Pix2PixDataset._filled_a_from_b_alpha(a,b, Pix2PixDataset.FILL_COLOR )
+            img_a = ImgUtil.load_img(self.pths[index]['a0'], do_resize=False, do_flatten=True)
+            img_a = Pix2PixDataset._filled_a_from_b_alpha(img_a,img_b, Pix2PixDataset.FILL_COLOR )
 
-        # here, images are 'jittered': resized to 286 and then cropped back to 256
-        jtr_amt = random.randint(10, 20)
-        jtr_sze = 256+jtr_amt
+        # here, images are 'jittered', shifted around at raw scale to mess with the centering
+        # at the same time, images are resized to training scale. this may happen via:
+        # cropping down without rescaling, thereby cropping out much of the image
+        # by scaling from raw to training scale (0.5), thereby keeping all of the image
+        # scaling to half training scale (0.25), thereby and expanding the field
 
-        a = a.resize((jtr_sze, jtr_sze), Image.BICUBIC)
-        b = b.resize((jtr_sze, jtr_sze), Image.BICUBIC)
-        a = transforms.ToTensor()(a)
-        b = transforms.ToTensor()(b)
-        w_offset = random.randint(0, max(0, jtr_sze - 256 - 1))
-        h_offset = random.randint(0, max(0, jtr_sze - 256 - 1))
 
-        a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
-        b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+        jtr_x = random.randint(-Pix2PixDataset.JIT_AMT, Pix2PixDataset.JIT_AMT)
+        jtr_y = random.randint(-Pix2PixDataset.JIT_AMT, Pix2PixDataset.JIT_AMT)
+        def jitter(img,pos,clr_back):
+            ret = Image.new('RGBA', img.size, clr_back)
+            ret.paste(img, pos)
+            return ret
 
-        a = transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))(a)
-        b = transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))(b)
+        resize_method = np.random.choice([0,1,2],p=[0.1,0.8,0.1]) # random selection with probabililtes
+        if forced_resize_method >=0: resize_method = forced_resize_method
+        if resize_method==0:
+            # jitter then crop down to center without rescaling
+            img_a = jitter(img_a,(jtr_x,jtr_y),(255, 255, 255, 255))
+            img_b = jitter(img_b,(jtr_x,jtr_y),(255, 255, 255, 0))
+            s0,s1 = (Pix2PixDataset.RAW_SZE - Pix2PixDataset.TRN_SZE)/2 , (Pix2PixDataset.RAW_SZE + Pix2PixDataset.TRN_SZE)/2
+            img_a = img_a.crop((s0,s0,s1,s1))
+            img_b = img_b.crop((s0,s0,s1,s1))
+        elif resize_method==1:
+            # jitter then scale down by 50% to training size
+            img_a = resize( jitter(img_a,(jtr_x,jtr_y),(255, 255, 255, 255)) )
+            img_b = resize( jitter(img_b,(jtr_x,jtr_y),(255, 255, 255, 0)) )
+        else:
+            # scale to 25% (1/2 training size), then paste onto training size image at jittered location
+            img_aa = resize( img_a, int(Pix2PixDataset.TRN_SZE/2) )
+            img_bb = resize( img_b, int(Pix2PixDataset.TRN_SZE/2) )
+            img_a = Image.new('RGBA', (Pix2PixDataset.TRN_SZE,Pix2PixDataset.TRN_SZE), (255, 255, 255, 255))
+            img_b = Image.new('RGBA', (Pix2PixDataset.TRN_SZE,Pix2PixDataset.TRN_SZE), (255, 255, 255, 0))
+            img_a.paste(img_aa, ( int(Pix2PixDataset.TRN_SZE/4)+jtr_x , int(Pix2PixDataset.TRN_SZE/4)+jtr_y ) )
+            img_b.paste(img_bb, ( int(Pix2PixDataset.TRN_SZE/4)+jtr_x , int(Pix2PixDataset.TRN_SZE/4)+jtr_y ) )
 
-        """
-        if random.random() < 0.5:
-            idx = [i for i in range(a.size(2) - 1, -1, -1)]
-            idx = torch.LongTensor(idx)
-            a = a.index_select(2, idx)
-            b = b.index_select(2, idx)
-        """
 
-        if self.direction == "a2b": return a, b
-        return b, a
+        imgten_a = transforms.ToTensor()(img_a)
+        imgten_b = transforms.ToTensor()(img_b)
+        imgten_a = transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))(imgten_a)
+        imgten_b = transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))(imgten_b)
+
+        if self.direction == "a2b": return imgten_a, imgten_b
+        return imgten_b, imgten_a
 
     def __len__(self):
         return len(self.pths)
@@ -293,6 +318,10 @@ class Pix2PixDataset(data.Dataset):
         #ret['pths_a1'] = False
         #if pth_a1: ret['pths_a1'] = sorted([os.path.join(pth_a1, f) for f in os.listdir(pth_a1) if any([f.startswith(pfix) for pfix in ret['common_prefixes']])])
 
+        # check image size from first rendered image
+        # TODO: make sure all images are the same size
+        ret['img_size'] = ImgUtil.load_img(ret['pths'][0]['b'], do_resize=False, do_flatten=False).size[0]
+
         return ret
 
     @staticmethod
@@ -337,7 +366,7 @@ class Pix2PixDataset(data.Dataset):
 
 
 
-        return val_dataset, test_dataset, train_dataset
+        return val_dataset, test_dataset, train_dataset, all_dataset
 
 class Pix2Pix256RGBA():
     IMG_SIZE = 256
