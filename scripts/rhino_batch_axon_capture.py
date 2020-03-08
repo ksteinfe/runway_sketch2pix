@@ -4,7 +4,7 @@ import Rhino, System
 import scriptcontext as sc
 import rhinoscriptsyntax as rs
 
-DEBUG = False
+DEBUG = True
 DEFAULT_VIEW_COUNT = 3
 
 DEFAULT_SAVE_PATH = r"C:\Users\ksteinfe\Desktop\TEMP"
@@ -14,9 +14,9 @@ FILL_LAYER_NAME = "fill"
 DO_CAPTURE_VIEW = True
 
 LINE_CURV_COLOR = '32,32,32'   # color of Rhino curve objects on the 'line' layer
-LINE_CURV_THICK = 1         # thickness of Rhino curve objects on the 'line' layer
-LINE_SILH_COLOR = '0,0,0'   # color of mesh and surface silhouettes on the 'line' layer
-LINE_SILH_THICK = 3         # thickness of mesh and surface silhouettes on the 'line' layer
+LINE_CURV_THICK = 2         # thickness of Rhino curve objects on the 'line' layer
+LINE_SILH_COLOR = '1,1,1'   # color of mesh and surface silhouettes on the 'line' layer
+LINE_SILH_THICK = 4         # thickness of mesh and surface silhouettes on the 'line' layer
 LINE_EDGE_COLOR = '128,128,128'# color of mesh and surface fold lines on the 'line' layer
 LINE_EDGE_THICK = 2         # thickness of mesh and surface fold lines on the 'line' layer
 FILL_CURV_THICK = 10        # thickness of Rhino curve objects on the 'fill' layer
@@ -31,9 +31,14 @@ def main():
     cfg = setup()
     rs.CurrentView(cfg['view'].ActiveViewportID)
     # MAIN LOOP
-    fake_xf = xforms_to_apply(cfg['groups_info'][0]['bbox'], cfg, DEBUG)
-    print("plottting {} views across {} xforms of {} objects.".format( cfg['view_count'], len(fake_xf), len(cfg['groups_info']) ) )
-    print("{} images will result.".format( cfg['view_count'] * len(fake_xf) * len(cfg['groups_info']) ) )
+    
+    msg0 = "{} views at {} zoom levels across {} xforms of {} objects.".format( cfg['view_count'], len(cfg['obj_bbox_pads']), cfg['xform_count'], len(cfg['groups_info']) ) 
+    msg1 = "{} images will result.".format( cfg['total_image_count'] ) 
+    print(msg0)
+    print(msg1)
+    if rs.MessageBox("This script will plot {}\n{}\nShall we proceed?".format(msg0,msg1), 4, "Ready to plot {} images?".format(cfg['total_image_count'])) != 6:
+        teardown(cfg)
+        exit()
     
     cfg['tmp_obj_ids'] = False
     cfg['rot_group'] = False
@@ -45,7 +50,7 @@ def main():
         for g,group_info in enumerate(cfg['groups_info']):
             print("##### {} ({} of {})".format(group_info['name'].lower(), g+1,len(cfg['groups_info'])))
             #print("{} objects in this group".format(len(group_info['obj_ids'])))
-            set_camera(group_info['bbox'], cfg)
+            #set_camera(group_info['bbox'], cfg)
             isolate_group(g,cfg)
             
             deg = 360.0/cfg['view_count']
@@ -63,12 +68,13 @@ def main():
                     rs.RemoveObjectsFromGroup(cfg['tmp_obj_ids'],group_info['name'])
                     rs.HideGroup(group_info['name'])
                     
-                    xbbox = bbox_of_objects(cfg['tmp_obj_ids'],cfg['obj_bbox_pad'] )
-                    set_camera(xbbox, cfg)
-                    
-                    name = "{}_r{:03}_x{:02}_{}".format(group_info['name'].lower(),r,x,cfg['layer_info']['parent'].Name.lower())
-                    is_first = (r==0 and x==0)
-                    do_capture(name,is_first, cfg) # capture view
+                    for p,pad in enumerate(cfg['obj_bbox_pads']):
+                        xbbox = bbox_of_objects(cfg['tmp_obj_ids'])
+                        set_camera(xbbox, pad, cfg)
+                        
+                        name = "{}_r{:03}_x{:02}_p{:02}_{}".format(group_info['name'].lower(),r,x,p,cfg['layer_info']['parent'].Name.lower())
+                        is_first = (r==0 and x==0)
+                        do_capture(name,is_first, cfg) # capture view
                     
                     isolate_group(g,cfg)
                     all_layers_on(cfg)
@@ -88,6 +94,9 @@ def main():
     except Exception as e:
         print("!!!! SCRIPT STOPPED !!!!")
         print e
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
     finally:
         teardown(cfg)
         
@@ -101,12 +110,12 @@ def setup():
     props = [
         ("view_count",DEFAULT_VIEW_COUNT),
         ("image_size",512),
-        ("zoom_padding_percent",0),
+        ("zoom_padding_percent","-10,10,75"),
         ("iso (NE, NW, SE, or SW)","SE"),
         ("do_scale_1d", "y"),
         ("do_scale_2d", "y"),
         ("do_shear", "n"),
-        ("render_or_capture", "render"),
+        ("render_or_capture", "capture"),
         ("worms_eye?", "n")
     ]
     prop_box_results = False
@@ -119,7 +128,7 @@ def setup():
     try:
         cfg['view_count']            = int(prop_box_results[0])
         cfg['size']                  = int(prop_box_results[1])
-        cfg['obj_bbox_pad']          = int(prop_box_results[2])*0.01
+        cfg['obj_bbox_pads']          = [int(s)*0.01 for s in prop_box_results[2].split(',')]
         cfg['iso_select']            = str(prop_box_results[3]).lower()
         cfg["do_scale_1d"]           = str(prop_box_results[4]).lower() in ("y", "yes", "true", "t", "1")
         cfg["do_scale_2d"]           = str(prop_box_results[5]).lower() in ("y", "yes", "true", "t", "1")
@@ -128,7 +137,7 @@ def setup():
         cfg["do_worms_eye"]          = str(prop_box_results[8]).lower() in ("y", "yes", "true", "t", "1")
         
     except Exception as e:
-        big_problem("There was a problem parsing the values given in the properties dialog.")
+        big_problem("There was a problem parsing the values given in the properties dialog.\n{}".format(e))
         
     
     ## groups to draw
@@ -140,6 +149,10 @@ def setup():
     #
     setup_layers(cfg)
     
+    ## xforms
+    #
+    fake_xf = xforms_to_apply(cfg['groups_info'][0]['bbox'], cfg, DEBUG)
+    cfg['xform_count'] = len(fake_xf)
     
     ## root path
     #
@@ -149,9 +162,6 @@ def setup():
     dir_cfg = initialize_directory(pth_root, cfg['do_capture_fill'])
     cfg.update(dir_cfg)
     
-    
-    with open(os.path.join(cfg['pth_save'],'settings.json'), 'w') as json_file:
-        json.dump({k:"{}".format(str(v)) for k,v in cfg.items() if k is not "groups_info"}, json_file, sort_keys=True, indent=4)
     
     ## view
     #
@@ -163,6 +173,13 @@ def setup():
         big_problem("There was a problem with the selected isometric view.\n'{}' is not a valid selection.".format(cfg["iso_select"]))        
     cfg["iso_cam_pos"] = poss[cfg["iso_select"]]
     
+    ## tidy up and save settings JSON
+    #
+    cfg['total_image_count'] = cfg['view_count'] * len(cfg['obj_bbox_pads']) * cfg['xform_count'] * len(cfg['groups_info'])
+    with open(os.path.join(cfg['pth_save'],'settings.json'), 'w') as json_file:
+        json.dump({k:"{}".format(str(v)) for k,v in cfg.items() if k != "groups_info"}, json_file, sort_keys=True, indent=4)
+    
+    
     ## SETUP RHINO
     #
     rs.UnselectAllObjects()
@@ -170,8 +187,16 @@ def setup():
     setup_floating_viewport(cfg)
     setup_render_settings(cfg)
     
-
+    # padding objects
+    wbbox = False
+    for gp in cfg['groups_info']:
+        if not wbbox: wbbox = gp['bbox']
+        else: wbbox.Union(gp['bbox'])
     
+    wbbox = pad_bbox(wbbox,10)
+    cfg['pad_obj_ids'] = []
+    cfg['pad_obj_ids'].append(rs.AddPoint(wbbox.Min))
+    cfg['pad_obj_ids'].append(rs.AddPoint(wbbox.Max))
     return cfg
     
 def teardown(cfg):
@@ -182,11 +207,15 @@ def teardown(cfg):
     cfg['view'].Maximized = cfg['view_restore']['maximized']
     cfg['view'].Size = cfg['view_restore']['size']
     """
-    if cfg['tmp_obj_ids']: 
+    if 'pad_obj_ids' in cfg and cfg['pad_obj_ids']: 
+        print("... deleting padding objects")
+        rs.DeleteObjects(cfg['pad_obj_ids'])
+    
+    if 'tmp_obj_ids' in cfg and cfg['tmp_obj_ids']: 
         print("... deleting xformed objects")
         rs.DeleteObjects(cfg['tmp_obj_ids'])
         
-    if cfg['rot_group']:
+    if 'rot_group' in cfg and cfg['rot_group']:
         print("... rotating objects back to their starting position")
         rxf = rs.XformRotation2(-cfg['tot_rot'], (0,0,1), cfg['rot_group']['bbox'].Center)
         rs.TransformObjects(cfg['rot_group']['obj_ids'], rxf)
@@ -262,7 +291,7 @@ def setup_groups(cfg):
             
         for name_grp in list(name_grps):
             ids = rs.ObjectsByGroup(name_grp)
-            bbox = bbox_of_objects(ids, cfg['obj_bbox_pad'])
+            bbox = bbox_of_objects(ids)
             cfg['groups_info'].append( {"name":name_grp, "bbox":bbox, "obj_ids":ids} )
         
         if len(cfg['groups_info'])==0:
@@ -291,24 +320,29 @@ def select_objects(cfg):
 
 ####################################################
 
-def set_camera(bbox, cfg):
+def set_camera(bbox, pad, cfg):
     pos = Rhino.Geometry.Point3d(*cfg["iso_cam_pos"])
     tar = Rhino.Geometry.Point3d(0,0,0)
     cfg['view'].ActiveViewport.SetCameraLocations(tar, pos)
-    cfg['view'].ActiveViewport.ZoomBoundingBox(bbox)
+    cfg['view'].ActiveViewport.ZoomBoundingBox( pad_bbox(bbox,pad) )
     cfg['view'].Redraw()
     
-def bbox_of_objects(guids, pad=0.25):
+def bbox_of_objects(guids, pad=0.05):
     bbox = False
     for obj_id in guids:
         rhobj = Rhino.RhinoDoc.ActiveDoc.Objects.Find(obj_id)
         bx = rhobj.Geometry.GetBoundingBox(True)
         if not bbox: bbox = bx
         else: bbox.Union(bx)
-        
-    dx = (bbox.Max.X - bbox.Min.X) * pad
-    dy = (bbox.Max.Y - bbox.Min.Y) * pad
-    dz = (bbox.Max.Z - bbox.Min.Z) * pad
+    
+    bbox = pad_bbox(bbox, pad)
+    return bbox
+
+def pad_bbox(box, amt):
+    bbox = Rhino.Geometry.BoundingBox(box.Min, box.Max) # copy box
+    dx = (bbox.Max.X - bbox.Min.X) * amt
+    dy = (bbox.Max.Y - bbox.Min.Y) * amt
+    dz = (bbox.Max.Z - bbox.Min.Z) * amt
     bbox.Inflate(dx, dy, dz);
     return bbox
 
@@ -398,6 +432,7 @@ def setup_layers(cfg):
         big_problem("There was a problem with the selected layer.\n{}".format(e))
         
     cfg['layer_info']['parent'].IsVisible = True
+    sc.doc.ActiveDoc.Layers.SetCurrentLayerIndex(cfg['layer_info']['parent'].Index, True)
     return
 
 def get_layer_info(root_layer_name):
@@ -598,7 +633,7 @@ def setup_floating_viewport(cfg):
     cfg['view'].Maximized = False
     cfg['view'].Size = System.Drawing.Size(cfg['size'],cfg['size'])
     """
-    set_camera(cfg['groups_info'][0]['bbox'], cfg)
+    set_camera(cfg['groups_info'][0]['bbox'], 0, cfg)
     isolate_group(0,cfg)
     activate_display_mode(cfg['display_modes']['rndr'], cfg)
 
