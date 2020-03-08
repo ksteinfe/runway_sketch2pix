@@ -4,7 +4,7 @@ import Rhino, System
 import scriptcontext as sc
 import rhinoscriptsyntax as rs
 
-DEBUG = True
+DEBUG = False
 DEFAULT_VIEW_COUNT = 3
 
 DEFAULT_SAVE_PATH = r"C:\Users\ksteinfe\Desktop\TEMP"
@@ -36,7 +36,7 @@ def main():
     msg1 = "{} images will result.".format( cfg['total_image_count'] ) 
     print(msg0)
     print(msg1)
-    if rs.MessageBox("This script will plot {}\n{}\nShall we proceed?".format(msg0,msg1), 4, "Ready to plot {} images?".format(cfg['total_image_count'])) != 6:
+    if rs.MessageBox("This script will plot {}\n{}\nThe folder {} has been created for this purpose.\nShall we proceed?".format(msg0,msg1,cfg['pth_save']), 4, "Ready to plot {} images?".format(cfg['total_image_count'])) != 6:
         teardown(cfg)
         exit()
     
