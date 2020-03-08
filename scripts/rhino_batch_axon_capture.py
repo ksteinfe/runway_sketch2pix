@@ -157,7 +157,7 @@ def setup():
     #
     cam_height = 0.75
     if cfg["do_worms_eye"]: cam_height *= -1
-    poss = {"ne":(1,1,cam_height),"nw":(-1,1,cam_height),"se":(1,-1,cam_height),"se":(-1,-1,cam_height)}
+    poss = {"ne":(1,1,cam_height),"nw":(-1,1,cam_height),"se":(1,-1,cam_height),"sw":(-1,-1,cam_height)}
         
     if cfg["iso_select"] not in poss:
         big_problem("There was a problem with the selected isometric view.\n'{}' is not a valid selection.".format(cfg["iso_select"]))        
@@ -476,6 +476,9 @@ def xforms_to_apply(bbox, cfg, do_limit):
         xf_shear(ctr, vz=(0,s2,1)),
         xf_shear(ctr, vz=(-s2,0,1)),
     ])
+    
+    
+    
     return ret
     
 def xf_scale(ctr, scale=(1,1,1)):
