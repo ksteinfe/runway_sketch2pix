@@ -14,7 +14,7 @@ from torch.optim import lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-version_number = 0.0
+version_number = 0.1
 print('pix2pix r{} has loaded.'.format(version_number))
 
 class ImgUtil():
@@ -105,11 +105,21 @@ class Pix2PixDataset(data.Dataset):
     RAW_SZE = 512 # should be twice Pix2Pix256RGBA.IMG_SIZE
     TRN_SZE = 256 # should be same as Pix2Pix256RGBA.IMG_SIZE
 
-    def __init__(self, extraction_rslt, direction="a2b"):
+    DEFAULT_RSZE_PROBS = [0.8,0.1,0.1]
+    # method 0 (default) = by scaling from raw to training scale (0.5), thereby keeping all of the image
+    # method 1 = cropping down without rescaling, thereby cropping out much of the image
+    # method 2 = scaling to half training scale (0.25), thereby and expanding the field
+
+    def __init__(self, extraction_rslt, direction="a2b", resize_method_probs=None):
         super(Pix2PixDataset, self).__init__()
         self.direction = direction
         self.is_compound = extraction_rslt['is_compound']
         self.pths = extraction_rslt['pths']
+
+        self.resize_method_probabililtes = Pix2PixDataset.DEFAULT_RSZE_PROBS
+        if resize_method_probs is not None: self.resize_method_probabililtes = resize_method_probs
+        strengths = np.array(resize_method_probs)
+        self.resize_method_probabililtes = list(strengths / strengths.sum())
 
         if extraction_rslt['img_size'] != Pix2PixDataset.RAW_SZE: raise Exception("!!!! Training set is not compatable with this version.\nRaw training image size of {} was expected, but {} was found.".format(Pix2PixDataset.RAW_SZE,extraction_rslt['img_size']))
         if Pix2PixDataset.RAW_SZE != 2*Pix2PixDataset.TRN_SZE: raise Exception("!!!! Raw training image size of {} is not twice as big as {}".format(Pix2PixDataset.RAW_SZE,Pix2PixDataset.TRN_SZE))
@@ -202,10 +212,9 @@ class Pix2PixDataset(data.Dataset):
 
         # here, images are 'jittered', shifted around at raw scale to mess with the centering
         # at the same time, images are resized to training scale. this may happen via:
-        # cropping down without rescaling, thereby cropping out much of the image
         # by scaling from raw to training scale (0.5), thereby keeping all of the image
+        # cropping down without rescaling, thereby cropping out much of the image
         # scaling to half training scale (0.25), thereby and expanding the field
-
 
         jtr_x = random.randint(-Pix2PixDataset.JIT_AMT, Pix2PixDataset.JIT_AMT)
         jtr_y = random.randint(-Pix2PixDataset.JIT_AMT, Pix2PixDataset.JIT_AMT)
@@ -214,19 +223,19 @@ class Pix2PixDataset(data.Dataset):
             ret.paste(img, pos)
             return ret
 
-        resize_method = np.random.choice([0,1,2],p=[0.1,0.8,0.1]) # random selection with probabililtes
+        resize_method = np.random.choice([0,1,2],p=self.resize_method_probabililtes) # random selection with probabililtes
         if forced_resize_method >=0: resize_method = forced_resize_method
         if resize_method==0:
+            # jitter then scale down by 50% to training size
+            img_a = resize( jitter(img_a,(jtr_x,jtr_y),(255, 255, 255, 255)) )
+            img_b = resize( jitter(img_b,(jtr_x,jtr_y),(255, 255, 255, 0)) )
+        elif resize_method==1:
             # jitter then crop down to center without rescaling
             img_a = jitter(img_a,(jtr_x,jtr_y),(255, 255, 255, 255))
             img_b = jitter(img_b,(jtr_x,jtr_y),(255, 255, 255, 0))
             s0,s1 = (Pix2PixDataset.RAW_SZE - Pix2PixDataset.TRN_SZE)/2 , (Pix2PixDataset.RAW_SZE + Pix2PixDataset.TRN_SZE)/2
             img_a = img_a.crop((s0,s0,s1,s1))
             img_b = img_b.crop((s0,s0,s1,s1))
-        elif resize_method==1:
-            # jitter then scale down by 50% to training size
-            img_a = resize( jitter(img_a,(jtr_x,jtr_y),(255, 255, 255, 255)) )
-            img_b = resize( jitter(img_b,(jtr_x,jtr_y),(255, 255, 255, 0)) )
         else:
             # scale to 25% (1/2 training size), then paste onto training size image at jittered location
             img_aa = resize( img_a, int(Pix2PixDataset.TRN_SZE/2) )
@@ -325,8 +334,8 @@ class Pix2PixDataset(data.Dataset):
         return ret
 
     @staticmethod
-    def define_input_pipeline(extraction_rslt, dinfo):
-        all_dataset = Pix2PixDataset(extraction_rslt)
+    def define_input_pipeline(extraction_rslt, dinfo, resize_method_probs=None):
+        all_dataset = Pix2PixDataset(extraction_rslt, resize_method_probs=resize_method_probs)
         sze = len(all_dataset)
         print("{} images found in the complete dataset".format(sze))
 
