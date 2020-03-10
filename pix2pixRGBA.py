@@ -118,7 +118,7 @@ class Pix2PixDataset(data.Dataset):
 
         self.resize_method_probabililtes = Pix2PixDataset.DEFAULT_RSZE_PROBS
         if resize_method_probs is not None: self.resize_method_probabililtes = resize_method_probs
-        strengths = np.array(resize_method_probs)
+        strengths = np.array(self.resize_method_probabililtes)
         self.resize_method_probabililtes = list(strengths / strengths.sum())
 
         if extraction_rslt['img_size'] != Pix2PixDataset.RAW_SZE: raise Exception("!!!! Training set is not compatable with this version.\nRaw training image size of {} was expected, but {} was found.".format(Pix2PixDataset.RAW_SZE,extraction_rslt['img_size']))
