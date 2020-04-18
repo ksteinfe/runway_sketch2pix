@@ -5,28 +5,40 @@ Using the guidelines described above, a custom Pix2Pix model has been developed 
 Listed below are steps for the installation and basic operation of the Sketch2Pix model on Runway.
 
 ### 1. Download and install Runway
-[Download Runway from this link](https://runwayml.com/download/), and install according to your platforms requirements. Runway is Beta software, and is updated often - sometimes for the better, sometime for worse. 
+|||
+|-|-|
+|[Download Runway from this link](https://runwayml.com/download/), and install according to your platforms requirements. Runway is Beta software, and is updated often - sometimes for the better, sometime for worse.  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image14.png) |
 
 
 ### 2. Create a Sketch2Pix Workspace
-In Runway, click on the "Browse Models" tab (CNTL+@), and search for the Sketch2Pix model. Once you’ve found it, click on the "add to workspace" button to add it to a new workspace.
+|||
+|-|-|
+|In Runway, click on the "Browse Models" tab (CNTL+@), and search for the Sketch2Pix model. Once you’ve found it, click on the "add to workspace" button to add it to a new workspace.  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image1.gif) |
 
 ### 3. Run the Model
-After choosing any one of the checkpoints (listed on the right panel), click the "Run Remotely" button to start the model. This will take some time. As the model is loading, move on to the next step.
+|||
+|-|-|
+|After choosing any one of the checkpoints (listed on the right panel), click the "Run Remotely" button to start the model. This will take some time. As the model is loading, move on to the next step.  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image3.png) |
 
 ### 4. Download Test Sketches
-A number of sample sketches are available for download from [this link](https://github.com/ksteinfe/runway_sketch2pix/raw/master/photoshop_plugin/releases/sketch_samples.zip). Download this ZIP file and copy the contents to a dedicated directory your local hard drive (such as a folder called "samples" on your desktop).
+|||
+|-|-|
+|A number of sample sketches are available for download from [this link](https://github.com/ksteinfe/runway_sketch2pix/raw/master/photoshop_plugin/releases/sketch_samples.zip). Download this ZIP file and copy the contents to a dedicated directory your local hard drive (such as a folder called "samples" on your desktop).  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image6.jpg) |
 
 ### 5. Prepare a Test Sketch
-From the “Input Type” dropdown on the top of the screen, select “File”. Then browse to the directory that you saved the sample sketches, and click “Select Folder”. After that, you should see a list of thumbnails of sample sketches on which to run an inference.
+|||
+|-|-|
+|From the “Input Type” dropdown on the top of the screen, select “File”. Then browse to the directory that you saved the sample sketches, and click “Select Folder”. After that, you should see a list of thumbnails of sample sketches on which to run an inference.  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image7.png) |
 
 ### 6. Run Inferences
-With the model running, any time an image is selected from the “input” section, it is passed to the remote model for inference, and the result shown in the “output” section, as shown in the nearby animation.
-At any time, you may choose to stop the model (using the Stop button), re-load a different checkpoint, and run the model again. 
+|||
+|-|-|
+|With the model running, any time an image is selected from the “input” section, it is passed to the remote model for inference, and the result shown in the “output” section, as shown in the nearby animation. At any time, you may choose to stop the model (using the Stop button), re-load a different checkpoint, and run the model again.   | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image8.gif) |
 
 ### 7. Stop the Model
-Remember that is costs money to run models remotely on RunwayML. As such, we should always remember to STOP ALL MODELS before closing Runway. You may do so by clicking on the Stop button.
-
+|||
+|-|-|
+|Remember that is costs money to run models remotely on RunwayML. As such, we should always remember to STOP ALL MODELS before closing Runway. You may do so by clicking on the Stop button.  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image10.png) |
 
 ## Sketch2Pix Photoshop Plugin Installation and Testing
 A plugin has been developed that links Photoshop to RunwayML, and is currently [available for download from this repository](https://github.com/ksteinfe/runway_sketch2pix/tree/master/photoshop_plugin/releases).
