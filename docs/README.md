@@ -15,8 +15,8 @@ Interfaces for interacting with this trained Pix2Pix model via digital sketching
 This step is is supported by the Sketch2Pix Plugin for Photoshop
 
 
-If you're new to Sketch2Pix, we recommend that you start with step (3) Sketching by following these instructions for installing the Sketch2Pix Runway Model, and then the Sketch2Pix Photoshop Plugin. Together, these two pieces will allow you to run inferences on your sketches in Photoshop using one of the many existing "brushes" that have already been developed. 
+If you're new to Sketch2Pix, we recommend that you start with step (3) Sketching by following [these instructions for installing the Sketch2Pix Runway Model, and then the Sketch2Pix Photoshop Plugin](https://github.com/ksteinfe/runway_sketch2pix/blob/master/docs/getting_started_sketching.md). Together, these two pieces will allow you to run inferences on your sketches in Photoshop using one of the many existing "brushes" that have already been developed. 
 
-Once you feel comfortable sketching, you may want to move on to training your own "brushes". This will require a number of other steps in (1) Data Production and (2) Pix2Pix Model Training. Look for updates here on how to proceed.
+Once you feel comfortable sketching, you may want to move on to training your own "brushes". This will require quite a bit more work in (1) Data Production and (2) Pix2Pix Model Training. We suggest first getting to know the model training process as described in [our page on training](https://github.com/ksteinfe/runway_sketch2pix/blob/master/docs/getting_started_training.md), before moving on to produce your own training data as described in [our page on creating training data sets](https://github.com/ksteinfe/runway_sketch2pix/blob/master/docs/getting_started_data.md).
 
 
