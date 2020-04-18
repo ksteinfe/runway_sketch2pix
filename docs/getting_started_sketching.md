@@ -51,7 +51,11 @@ Using the link above, download the latest release of the Sketch2Pix photoshop pl
 For the Photoshop plugin to work, we'll have to make one adjustment in the deep bowels of our computer.
 
 #### In Windows
-First, open the Registry Editor. Then, using the directory tree on the left-hand side, browse to the following location:
+First, open the Registry Editor. 
+
+![](http://media.ksteinfe.com/200317/sketch2pix_demo_image2.png)
+
+Then, using the directory tree on the left-hand side, browse to the following location:
 
 	HKEY_CURRENT_USER / 
 		Software / 
@@ -60,6 +64,8 @@ First, open the Registry Editor. Then, using the directory tree on the left-hand
 
 
 Once in the proper location, add a new entry called `PlayerDebugMode` of type `string` with the value of `1`.
+
+![](http://media.ksteinfe.com/200317/sketch2pix_demo_image13.gif)
 
 #### In OSX
 Using the Terminal, execute the following command (don’t copy the $):
@@ -101,11 +107,15 @@ Following the instructions above, make sure a model is running and is able to se
 ### 5. Open the Sketch2Pix Panel in Photoshop
 Windows -> Extensions -> Sketch2Pix
 
+![](http://media.ksteinfe.com/200317/sketch2pix_demo_image11.png)
+
 ### 6. Create and Configure a PSD File
 Instructions will be provided on how to properly setup a PSD file for sketching.
 
 ### 7. INFER!
 With the desired layer selected, press the “abracadabra!” button
+
+![](http://media.ksteinfe.com/200317/sketch2pix_demo_image4.png)
 
 ### 8. Rinse and Repeat
 A new layer group called “generated” will be created.
