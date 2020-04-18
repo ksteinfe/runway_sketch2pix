@@ -9,7 +9,6 @@ Listed below are steps for the installation and basic operation of the Sketch2Pi
 |-|-|
 |[Download Runway from this link](https://runwayml.com/download/), and install according to your platforms requirements. Runway is Beta software, and is updated often - sometimes for the better, sometime for worse.  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image14.png) |
 
-
 ### 2. Create a Sketch2Pix Workspace
 |||
 |-|-|
