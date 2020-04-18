@@ -22,7 +22,7 @@ Listed below are steps for the installation and basic operation of the Sketch2Pi
 ### 4. Download Test Sketches
 |||
 |-|-|
-|A number of sample sketches are available for download from [this link](https://github.com/ksteinfe/runway_sketch2pix/raw/master/photoshop_plugin/releases/sketch_samples.zip). Download this ZIP file and copy the contents to a dedicated directory your local hard drive (such as a folder called "samples" on your desktop).  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image6.jpg) |
+|A number of sample sketches are available for download from [this link](https://github.com/ksteinfe/runway_sketch2pix/raw/master/docs/sketch_samples.zip). Download this ZIP file and copy the contents to a dedicated directory your local hard drive (such as a folder called "samples" on your desktop).  | ![](http://media.ksteinfe.com/200317/sketch2pix_demo_image6.jpg) |
 
 ### 5. Prepare a Test Sketch
 |||
