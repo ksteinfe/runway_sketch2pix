@@ -41,7 +41,7 @@ In Runway, click on the "Browse Models" tab (CNTL+@), and search for the Sketch2
 After choosing any one of the checkpoints (listed on the right panel), click the "Run Remotely" button to start the model. This will take some time. As the model is loading, move on to the next step.
 
 #### 4. Download Test Sketches
-A number of sample sketches are available here. Download this ZIP file and copy the contents to a dedicated directory your local hard drive (such as a folder called "samples" on your desktop).
+A number of sample sketches are available for download from [this link](https://github.com/ksteinfe/runway_sketch2pix/raw/master/photoshop_plugin/releases/sketch_samples.zip). Download this ZIP file and copy the contents to a dedicated directory your local hard drive (such as a folder called "samples" on your desktop).
 
 #### 5. Prepare a Test Sketch
 From the “Input Type” dropdown on the top of the screen, select “File”. Then browse to the directory that you saved the sample sketches, and click “Select Folder”. After that, you should see a list of thumbnails of sample sketches on which to run an inference.
@@ -55,12 +55,12 @@ Remember that is costs money to run models remotely on RunwayML. As such, we sho
 
 
 ### Sketch2Pix Photoshop Plugin Installation and Testing
-A plugin has been developed that links Photoshop to RunwayML, and is currently available for download here.
+A plugin has been developed that links Photoshop to RunwayML, and is currently [available for download from this repository](https://github.com/ksteinfe/runway_sketch2pix/tree/master/photoshop_plugin/releases).
 
 Listed below are steps for the installation and basic operation of the Sketch2Pix Photoshop plugin. We assume that the above steps for installing and testing Runway have been completed.
 
 #### 1. Download the Sketch2Pix Photoshop Plugin
-Using the link above, download the latest release of the Sketch2Pix photoshop plugin. Note that releases are packed into ZIP files that are named for the date of release.
+Using the link above, download the latest release of the Sketch2Pix photoshop plugin. Note that releases are packed into ZIP files that are named for the date of release. To download a ZIP file from GitHub, click on the desired file to bring up the repository page for the file, and then click the "download" button.
 
 #### 2. Set Debug Mode
 For the Photoshop plugin to work, we'll have to make one adjustment in the deep bowels of our computer.
@@ -127,13 +127,10 @@ A new layer group called “generated” will be created.
 
 
 ### Sketching Using Runway + Photoshop
+Here is a nice video that shows how to use the Photoshop plugin in concert with the Sketch2Pix Runway model to run inferences on your own sketches.
 
 
-<figure class="video_container">
-  <video controls="true" allowfullscreen="true" poster="path/to/poster_image.png">
-    <source src="http://media.ksteinfe.com/200317/sketch2pix_in_photoshop.mp4" type="video/mp4">
-  </video>
-</figure>
+[![link to tutorial video](http://media.ksteinfe.com/200317/sketch2pix_in_photoshop.png)](http://media.ksteinfe.com/200317/sketch2pix_in_photoshop.mp4)
 
 
 <video src="http://media.ksteinfe.com/200317/sketch2pix_in_photoshop.mp4" width="320" height="200" controls preload></video>
